@@ -1,0 +1,137 @@
+Test Case 1:
+Grid:
+SLW
+WLL
+ELL
+
+DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (1,1) (1,1) (1,1) (1,2) (1,2) (1,2) (2,2) (2,2) (2,2) (2,1) (2,1) (2,1) (2,0) 
+DFS Path Length: 19
+DFS Energy Consumed: 30
+
+BFS Path: (0,0) (0,0) (1,0) (2,0) 
+BFS Path Length: 4
+BFS Energy Consumed: 4
+
+BestFS Path: (0,0) (0,1) (1,1) (2,1) (2,0) 
+BestFS Path Length: 5
+BestFS Energy Consumed: 4
+
+----------------------------------------
+Test Case 2:
+Grid:
+SLLW
+LPWL
+LLLE
+
+DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (0,2) (0,2) (0,3) (0,3) (0,3) (1,3) (1,3) (1,3) (2,3) 
+DFS Path Length: 15
+DFS Energy Consumed: 23
+
+BFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) 
+BFS Path Length: 6
+BFS Energy Consumed: 5
+
+BestFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) 
+BestFS Path Length: 6
+BestFS Energy Consumed: 5
+
+----------------------------------------
+Test Case 3:
+Grid:
+SLLE
+LLLL
+LLLL
+
+DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (0,2) (0,2) (0,2) (0,3) 
+DFS Path Length: 10
+DFS Energy Consumed: 15
+
+BFS Path: (0,0) (0,1) (0,2) (0,3) 
+BFS Path Length: 4
+BFS Energy Consumed: 3
+
+BestFS Path: (0,0) (0,1) (0,2) (0,3) 
+BestFS Path Length: 4
+BestFS Energy Consumed: 3
+
+----------------------------------------
+Test Case 4:
+Grid:
+SLLW
+LPWL
+LLLE
+
+DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (0,2) (0,2) (0,3) (0,3) (0,3) (1,3) (1,3) (1,3) (2,3) 
+DFS Path Length: 15
+DFS Energy Consumed: 23
+
+BFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) 
+BFS Path Length: 6
+BFS Energy Consumed: 5
+
+BestFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) 
+BestFS Path Length: 6
+BestFS Energy Consumed: 5
+
+----------------------------------------
+Test Case 5:
+Grid:
+SPLLE
+LPPWL
+LLLLE
+
+DFS Path: (0,0) (0,0) (0,0) (1,0) (1,0) (1,0) (2,0) (2,0) (2,0) (2,1) (2,1) (2,1) (2,2) (2,2) (2,2) (2,3) (2,3) (2,3) (2,4) (2,4) (2,4) (1,4) (1,4) (1,4) (0,4) 
+DFS Path Length: 25
+DFS Energy Consumed: 40
+
+BFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) (2,4) (1,4) (0,4) 
+BFS Path Length: 9
+BFS Energy Consumed: 8
+
+BestFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) (2,4) (1,4) (0,4) 
+BestFS Path Length: 9
+BestFS Energy Consumed: 8
+
+----------------------------------------
+Test Case 6:
+Grid:
+SLLLW
+LPPWL
+LWLWL
+LLLLE
+
+DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (0,2) (0,2) (0,2) (0,3) (0,3) (0,4) (0,4) (0,4) (1,4) (1,4) (1,4) (2,4) (2,4) (2,4) (3,4) 
+DFS Path Length: 21
+DFS Energy Consumed: 33
+
+BFS Path: (0,0) (1,0) (2,0) (3,0) (3,1) (3,2) (3,3) (3,4) 
+BFS Path Length: 8
+BFS Energy Consumed: 7
+
+BestFS Path: (0,0) (1,0) (2,0) (3,0) (3,1) (3,2) (3,3) (3,4) 
+BestFS Path Length: 8
+BestFS Energy Consumed: 7
+
+----------------------------------------
+Test Case 7:
+Grid:
+SLLWLL
+LPWPWL
+LWLWPL
+LLLPLL
+WWLLPL
+LLLLEL
+
+DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (0,2) (0,2) (0,3) (0,3) (0,3) (0,4) (0,4) (0,4) (0,5) (0,5) (0,5) (1,5) (1,5) (1,5) (2,5) (2,5) (2,5) (3,5) (3,5) (3,5) (4,5) (4,5) (4,5) (5,5) (5,5) (5,5) (5,4) 
+DFS Path Length: 33
+DFS Energy Consumed: 53
+
+BFS Path: (0,0) (1,0) (2,0) (3,0) (3,1) (3,2) (4,2) (5,2) (5,3) (5,4) 
+BFS Path Length: 10
+BFS Energy Consumed: 9
+
+BestFS Path: (0,0) (1,0) (2,0) (3,0) (3,1) (3,2) (4,2) (4,3) (5,3) (5,4) 
+BestFS Path Length: 10
+BestFS Energy Consumed: 9
+
+----------------------------------------
