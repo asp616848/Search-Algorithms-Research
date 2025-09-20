@@ -3,10 +3,21 @@
 
 
 #include <bits/stdc++.h>
+#include <chrono>
 using namespace std;
 
 
 enum Form { HUMAN, BIRD, FISH };
+
+
+struct AlgorithmMetrics {
+    bool success;
+    int nodes_explored;
+    int path_length;
+    int energy_consumed;
+    double time_ms;
+    string algorithm_name;
+};
 
 
 struct State {
@@ -42,9 +53,9 @@ vector<State> MoveGen(const State& s, const Dungeon& d);
 int heuristic(const State& s, const Dungeon& d);
 
 
-bool DFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solution, int& final_energy);
-bool BFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solution, int& final_energy);
-bool BestFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solution, int& final_energy);
+bool DFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solution, int& final_energy, int& nodes_explored);
+bool BFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solution, int& final_energy, int& nodes_explored);
+bool BestFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solution, int& final_energy, int& nodes_explored);
 
 
 #endif

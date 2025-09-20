@@ -1,0 +1,256 @@
+Test Case 1:
+Grid:
+SLW
+WLL
+ELL
+
+DFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (0,2,FISH,111) (1,2,HUMAN,108) (1,1,HUMAN,107) (1,0,FISH,104) (2,0,HUMAN,101) 
+DFS Path Length: 7
+DFS Energy Consumed: 14
+DFS Nodes Explored: 7
+DFS Time: 0 ms
+
+BFS Path: (0,0,HUMAN,115) (1,0,FISH,112) (2,0,HUMAN,109) 
+BFS Path Length: 3
+BFS Energy Consumed: 6
+BFS Nodes Explored: 4
+BFS Time: 0 ms
+
+BestFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (1,1,HUMAN,113) (2,1,HUMAN,112) (2,0,HUMAN,111) 
+BestFS Path Length: 5
+BestFS Energy Consumed: 4
+BestFS Nodes Explored: 9
+BestFS Time: 0 ms
+
+
+Comparison Table for Test Case 1:
++-----------+----------+---------------+--------+----------+----------+
+| Algorithm | Success  | Nodes Explrd  | Length | Energy   | Time(ms) |
++-----------+----------+---------------+--------+----------+----------+
+| DFS       | Success  | 7             | 7      | 14       | 0.00     |
+| BFS       | Success  | 4             | 3      | 6        | 0.00     |
+| BestFS    | Success  | 9             | 5      | 4        | 0.00     |
++-----------+----------+---------------+--------+----------+----------+
+----------------------------------------
+Test Case 2:
+Grid:
+SLLW
+LPWL
+LLLE
+
+DFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (0,2,HUMAN,113) (0,3,FISH,110) (1,3,HUMAN,107) (1,2,FISH,104) (1,1,BIRD,101) (1,0,HUMAN,98) (2,0,HUMAN,97) (2,1,HUMAN,96) (2,2,HUMAN,95) (2,3,HUMAN,94) 
+DFS Path Length: 12
+DFS Energy Consumed: 21
+DFS Nodes Explored: 12
+DFS Time: 1.02 ms
+
+BFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (2,1,HUMAN,112) (2,2,HUMAN,111) (2,3,HUMAN,110) 
+BFS Path Length: 6
+BFS Energy Consumed: 5
+BFS Nodes Explored: 12
+BFS Time: 0.00 ms
+
+BestFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (2,1,HUMAN,112) (2,2,HUMAN,111) (2,3,HUMAN,110) 
+BestFS Path Length: 6
+BestFS Energy Consumed: 5
+BestFS Nodes Explored: 12
+BestFS Time: 0.00 ms
+
+
+Comparison Table for Test Case 2:
++-----------+----------+---------------+--------+----------+----------+
+| Algorithm | Success  | Nodes Explrd  | Length | Energy   | Time(ms) |
++-----------+----------+---------------+--------+----------+----------+
+| DFS       | Success  | 12            | 12     | 21       | 1.02     |
+| BFS       | Success  | 12            | 6      | 5        | 0.00     |
+| BestFS    | Success  | 12            | 6      | 5        | 0.00     |
++-----------+----------+---------------+--------+----------+----------+
+----------------------------------------
+Test Case 3:
+Grid:
+SPWE
+LLLL
+LLLL
+
+DFS Path: (0,0,HUMAN,115) (0,1,BIRD,112) (0,2,FISH,109) (0,3,HUMAN,106) 
+DFS Path Length: 4
+DFS Energy Consumed: 9
+DFS Nodes Explored: 4
+DFS Time: 0.00 ms
+
+BFS Path: (0,0,HUMAN,115) (0,1,BIRD,112) (0,2,FISH,109) (0,3,HUMAN,106) 
+BFS Path Length: 4
+BFS Energy Consumed: 9
+BFS Nodes Explored: 9
+BFS Time: 0.00 ms
+
+BestFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (1,1,HUMAN,113) (1,2,HUMAN,112) (1,3,HUMAN,111) (0,3,HUMAN,110) 
+BestFS Path Length: 6
+BestFS Energy Consumed: 5
+BestFS Nodes Explored: 12
+BestFS Time: 0.00 ms
+
+
+Comparison Table for Test Case 3:
++-----------+----------+---------------+--------+----------+----------+
+| Algorithm | Success  | Nodes Explrd  | Length | Energy   | Time(ms) |
++-----------+----------+---------------+--------+----------+----------+
+| DFS       | Success  | 4             | 4      | 9        | 0.00     |
+| BFS       | Success  | 9             | 4      | 9        | 0.00     |
+| BestFS    | Success  | 12            | 6      | 5        | 0.00     |
++-----------+----------+---------------+--------+----------+----------+
+----------------------------------------
+Test Case 4:
+Grid:
+SLLW
+LPWL
+LLLE
+
+DFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (0,2,HUMAN,113) (0,3,FISH,110) (1,3,HUMAN,107) (1,2,FISH,104) (1,1,BIRD,101) (1,0,HUMAN,98) (2,0,HUMAN,97) (2,1,HUMAN,96) (2,2,HUMAN,95) (2,3,HUMAN,94) 
+DFS Path Length: 12
+DFS Energy Consumed: 21
+DFS Nodes Explored: 12
+DFS Time: 1.00 ms
+
+BFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (2,1,HUMAN,112) (2,2,HUMAN,111) (2,3,HUMAN,110) 
+BFS Path Length: 6
+BFS Energy Consumed: 5
+BFS Nodes Explored: 12
+BFS Time: 0.00 ms
+
+BestFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (2,1,HUMAN,112) (2,2,HUMAN,111) (2,3,HUMAN,110) 
+BestFS Path Length: 6
+BestFS Energy Consumed: 5
+BestFS Nodes Explored: 12
+BestFS Time: 1.00 ms
+
+
+Comparison Table for Test Case 4:
++-----------+----------+---------------+--------+----------+----------+
+| Algorithm | Success  | Nodes Explrd  | Length | Energy   | Time(ms) |
++-----------+----------+---------------+--------+----------+----------+
+| DFS       | Success  | 12            | 12     | 21       | 1.00     |
+| BFS       | Success  | 12            | 6      | 5        | 0.00     |
+| BestFS    | Success  | 12            | 6      | 5        | 1.00     |
++-----------+----------+---------------+--------+----------+----------+
+----------------------------------------
+Test Case 5:
+Grid:
+SPLLE
+LPPWL
+LLLLE
+
+DFS Path: (0,0,HUMAN,115) (0,1,BIRD,112) (0,2,HUMAN,109) (0,3,HUMAN,108) (0,4,HUMAN,107) 
+DFS Path Length: 5
+DFS Energy Consumed: 8
+DFS Nodes Explored: 5
+DFS Time: 0.00 ms
+
+BFS Path: (0,0,HUMAN,115) (0,1,BIRD,112) (0,2,HUMAN,109) (0,3,HUMAN,108) (0,4,HUMAN,107) 
+BFS Path Length: 5
+BFS Energy Consumed: 8
+BFS Nodes Explored: 12
+BFS Time: 0.00 ms
+
+BestFS Path: (0,0,HUMAN,115) (0,1,BIRD,112) (0,2,HUMAN,109) (0,3,HUMAN,108) (0,4,HUMAN,107) 
+BestFS Path Length: 5
+BestFS Energy Consumed: 8
+BestFS Nodes Explored: 15
+BestFS Time: 1.12 ms
+
+
+Comparison Table for Test Case 5:
++-----------+----------+---------------+--------+----------+----------+
+| Algorithm | Success  | Nodes Explrd  | Length | Energy   | Time(ms) |
++-----------+----------+---------------+--------+----------+----------+
+| DFS       | Success  | 5             | 5      | 8        | 0.00     |
+| BFS       | Success  | 12            | 5      | 8        | 0.00     |
+| BestFS    | Success  | 15            | 5      | 8        | 1.12     |
++-----------+----------+---------------+--------+----------+----------+
+----------------------------------------
+Test Case 6:
+Grid:
+SLLLW
+LPPWL
+LWLWL
+LLLLE
+
+DFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (0,2,HUMAN,113) (0,3,HUMAN,112) (0,4,FISH,109) (1,4,HUMAN,106) (1,3,FISH,103) (1,2,BIRD,100) (1,1,BIRD,99) (1,0,HUMAN,96) (2,0,HUMAN,95) (2,1,FISH,92) (2,2,HUMAN,89) (2,3,FISH,86) (2,4,HUMAN,83) (3,4,HUMAN,82) 
+DFS Path Length: 16
+DFS Energy Consumed: 33
+DFS Nodes Explored: 16
+DFS Time: 0.81 ms
+
+BFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (3,0,HUMAN,112) (3,1,HUMAN,111) (3,2,HUMAN,110) (3,3,HUMAN,109) (3,4,HUMAN,108) 
+BFS Path Length: 8
+BFS Energy Consumed: 7
+BFS Nodes Explored: 20
+BFS Time: 0.00 ms
+
+BestFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (3,0,HUMAN,112) (3,1,HUMAN,111) (3,2,HUMAN,110) (3,3,HUMAN,109) (3,4,HUMAN,108) 
+BestFS Path Length: 8
+BestFS Energy Consumed: 7
+BestFS Nodes Explored: 20
+BestFS Time: 1.05 ms
+
+
+Comparison Table for Test Case 6:
++-----------+----------+---------------+--------+----------+----------+
+| Algorithm | Success  | Nodes Explrd  | Length | Energy   | Time(ms) |
++-----------+----------+---------------+--------+----------+----------+
+| DFS       | Success  | 16            | 16     | 33       | 0.81     |
+| BFS       | Success  | 20            | 8      | 7        | 0.00     |
+| BestFS    | Success  | 20            | 8      | 7        | 1.05     |
++-----------+----------+---------------+--------+----------+----------+
+----------------------------------------
+Test Case 7:
+Grid:
+SLLWLL
+LPWPWL
+LWLWPL
+LLLPLL
+WWLLPL
+LLLLEL
+
+DFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (0,2,HUMAN,113) (0,3,FISH,110) (0,4,HUMAN,107) (0,5,HUMAN,106) (1,5,HUMAN,105) (1,4,FISH,102) (1,3,BIRD,99) (1,2,FISH,96) (1,1,BIRD,93) (1,0,HUMAN,90) (2,0,HUMAN,89) (2,1,FISH,86) (2,2,HUMAN,83) (2,3,FISH,80) (2,4,BIRD,77) (2,5,HUMAN,74) (3,5,HUMAN,73) (3,4,HUMAN,72) (3,3,BIRD,69) (3,2,HUMAN,66) (3,1,HUMAN,65) (3,0,HUMAN,64) (4,0,FISH,61) (4,1,FISH,60) (4,2,HUMAN,57) (4,3,HUMAN,56) (4,4,BIRD,53) (4,5,HUMAN,50) (5,5,HUMAN,49) (5,4,HUMAN,48) 
+DFS Path Length: 32
+DFS Energy Consumed: 67
+DFS Nodes Explored: 32
+DFS Time: 1.00 ms
+
+BFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (3,0,HUMAN,112) (4,0,FISH,109) (5,0,HUMAN,106) (5,1,HUMAN,105) (5,2,HUMAN,104) (5,3,HUMAN,103) (5,4,HUMAN,102) 
+BFS Path Length: 10
+BFS Energy Consumed: 13
+BFS Nodes Explored: 34
+BFS Time: 0.95 ms
+
+BestFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (3,0,HUMAN,112) (3,1,HUMAN,111) (3,2,HUMAN,110) (4,2,HUMAN,109) (4,3,HUMAN,108) (5,3,HUMAN,107) (5,4,HUMAN,106) 
+BestFS Path Length: 10
+BestFS Energy Consumed: 9
+BestFS Nodes Explored: 36
+BestFS Time: 0.00 ms
+
+
+Comparison Table for Test Case 7:
++-----------+----------+---------------+--------+----------+----------+
+| Algorithm | Success  | Nodes Explrd  | Length | Energy   | Time(ms) |
++-----------+----------+---------------+--------+----------+----------+
+| DFS       | Success  | 32            | 32     | 67       | 1.00     |
+| BFS       | Success  | 34            | 10     | 13       | 0.95     |
+| BestFS    | Success  | 36            | 10     | 9        | 0.00     |
++-----------+----------+---------------+--------+----------+----------+
+----------------------------------------
+
+================================================================================
+OVERALL ALGORITHM COMPARISON SUMMARY
+================================================================================
+
+Algorithm Performance Summary (Averages across all test cases):
++----------+------------+---------------+--------+----------+----------+
+| Algo     | Success    | Avg Nodes     | Avg    | Avg      | Avg      |
+| Name     | Rate       | Explored      | Length | Energy   | Time(ms) |
++----------+------------+---------------+--------+----------+----------+
+| DFS      | 100.0     % | 12.6          | 12.6   | 24.7     | 0.548    |
+| BFS      | 100.0     % | 14.7          | 6.0    | 7.6      | 0.135    |
+| BestFS   | 100.0     % | 16.6          | 6.6    | 6.1      | 0.453    |
++----------+------------+---------------+--------+----------+----------+

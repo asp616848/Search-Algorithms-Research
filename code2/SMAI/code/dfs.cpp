@@ -1,10 +1,11 @@
 #include "shapeshifter.h"
 
 
-bool DFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solution, int& final_energy) {
+bool DFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solution, int& final_energy, int& nodes_explored) {
     stack<State> open;
     set<tuple<int,int,Form>> closed;
     open.push(start);
+    nodes_explored = 0;
 
 
     while (!open.empty()) {
@@ -12,6 +13,7 @@ bool DFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solutio
         auto key = make_tuple(cur.x, cur.y, cur.form);
         if (closed.count(key)) continue;
         closed.insert(key);
+        nodes_explored++;
 
 
         if (GoalTest(cur, d)) {

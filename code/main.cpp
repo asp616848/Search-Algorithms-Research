@@ -1,14 +1,11 @@
-#include "shapeshifter.h"
 
-extern bool DFS(const Dungeon&, State, vector<pair<int,int>>&);
-extern bool BFS(const Dungeon&, State, vector<pair<int,int>>&);
-extern bool BestFS(const Dungeon&, State, vector<pair<int,int>>&);
+#include "shapeshifter.h"
 
 int main() {
     vector<vector<string>> test_grids = {
         {"SLW","WLL","ELL"},
         {"SLLW", "LPWL", "LLLE"},
-        {"SLLE", "LLLL", "LLLL"},
+        {"SPWE", "LLLL", "LLLL"},
         {"SLLW", "LPWL", "LLLE"},
         {"SPLLE", "LPPWL", "LLLLE"},
         {"SLLLW", "LPPWL", "LWLWL", "LLLLE"},
@@ -34,9 +31,9 @@ int main() {
                 }
             }
         }
-        State start(d.start.first, d.start.second, HUMAN, energy, {{d.start.first,d.start.second}});
+        State start(d.start.first, d.start.second, HUMAN, energy, {make_tuple(d.start.first,d.start.second,HUMAN,energy)});
 
-        vector<pair<int,int>> sol;
+        vector<tuple<int,int,Form,int>> sol;
         int final_energy;
 
         fout << "Test Case " << (t+1) << ":\n";
@@ -46,7 +43,13 @@ int main() {
 
         if (DFS(d, start, sol, final_energy)) {
             fout << "DFS Path: ";
-            for (auto p: sol) fout << "(" << p.first << "," << p.second << ") ";
+            for (auto p: sol) {
+                fout << "(" << get<0>(p) << "," << get<1>(p) << ",";
+                if(get<2>(p)==HUMAN) fout << "HUMAN";
+                else if(get<2>(p)==BIRD) fout << "BIRD";
+                else fout << "FISH";
+                fout << "," << get<3>(p) << ") ";
+            }
             fout << "\nDFS Path Length: " << sol.size() << endl;
             fout << "DFS Energy Consumed: " << (energy - final_energy) << endl;
             fout << endl;
@@ -55,7 +58,13 @@ int main() {
         }
         if (BFS(d, start, sol, final_energy)) {
             fout << "BFS Path: ";
-            for (auto p: sol) fout << "(" << p.first << "," << p.second << ") ";
+            for (auto p: sol) {
+                fout << "(" << get<0>(p) << "," << get<1>(p) << ",";
+                if(get<2>(p)==HUMAN) fout << "HUMAN";
+                else if(get<2>(p)==BIRD) fout << "BIRD";
+                else fout << "FISH";
+                fout << "," << get<3>(p) << ") ";
+            }
             fout << "\nBFS Path Length: " << sol.size() << endl;
             fout << "BFS Energy Consumed: " << (energy - final_energy) << endl;
             fout << endl;
@@ -64,7 +73,13 @@ int main() {
         }
         if (BestFS(d, start, sol, final_energy)) {
             fout << "BestFS Path: ";
-            for (auto p: sol) fout << "(" << p.first << "," << p.second << ") ";
+            for (auto p: sol) {
+                fout << "(" << get<0>(p) << "," << get<1>(p) << ",";
+                if(get<2>(p)==HUMAN) fout << "HUMAN";
+                else if(get<2>(p)==BIRD) fout << "BIRD";
+                else fout << "FISH";
+                fout << "," << get<3>(p) << ") ";
+            }
             fout << "\nBestFS Path Length: " << sol.size() << endl;
             fout << "BestFS Energy Consumed: " << (energy - final_energy) << endl;
             fout << endl;

@@ -4,15 +4,15 @@ SLW
 WLL
 ELL
 
-DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (1,1) (1,1) (1,1) (1,2) (1,2) (1,2) (2,2) (2,2) (2,2) (2,1) (2,1) (2,1) (2,0) 
-DFS Path Length: 19
-DFS Energy Consumed: 30
+DFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (0,2,FISH,111) (1,2,HUMAN,108) (1,1,HUMAN,107) (1,0,FISH,104) (2,0,HUMAN,101) 
+DFS Path Length: 7
+DFS Energy Consumed: 14
 
-BFS Path: (0,0) (0,0) (1,0) (2,0) 
-BFS Path Length: 4
-BFS Energy Consumed: 4
+BFS Path: (0,0,HUMAN,115) (1,0,FISH,112) (2,0,HUMAN,109) 
+BFS Path Length: 3
+BFS Energy Consumed: 6
 
-BestFS Path: (0,0) (0,1) (1,1) (2,1) (2,0) 
+BestFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (1,1,HUMAN,113) (2,1,HUMAN,112) (2,0,HUMAN,111) 
 BestFS Path Length: 5
 BestFS Energy Consumed: 4
 
@@ -23,36 +23,36 @@ SLLW
 LPWL
 LLLE
 
-DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (0,2) (0,2) (0,3) (0,3) (0,3) (1,3) (1,3) (1,3) (2,3) 
-DFS Path Length: 15
-DFS Energy Consumed: 23
+DFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (0,2,HUMAN,113) (0,3,FISH,110) (1,3,HUMAN,107) (1,2,FISH,104) (1,1,BIRD,101) (1,0,HUMAN,98) (2,0,HUMAN,97) (2,1,HUMAN,96) (2,2,HUMAN,95) (2,3,HUMAN,94) 
+DFS Path Length: 12
+DFS Energy Consumed: 21
 
-BFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) 
+BFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (2,1,HUMAN,112) (2,2,HUMAN,111) (2,3,HUMAN,110) 
 BFS Path Length: 6
 BFS Energy Consumed: 5
 
-BestFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) 
+BestFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (2,1,HUMAN,112) (2,2,HUMAN,111) (2,3,HUMAN,110) 
 BestFS Path Length: 6
 BestFS Energy Consumed: 5
 
 ----------------------------------------
 Test Case 3:
 Grid:
-SLLE
+SPWE
 LLLL
 LLLL
 
-DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (0,2) (0,2) (0,2) (0,3) 
-DFS Path Length: 10
-DFS Energy Consumed: 15
+DFS Path: (0,0,HUMAN,115) (0,1,BIRD,112) (0,2,FISH,109) (0,3,HUMAN,106) 
+DFS Path Length: 4
+DFS Energy Consumed: 9
 
-BFS Path: (0,0) (0,1) (0,2) (0,3) 
+BFS Path: (0,0,HUMAN,115) (0,1,BIRD,112) (0,2,FISH,109) (0,3,HUMAN,106) 
 BFS Path Length: 4
-BFS Energy Consumed: 3
+BFS Energy Consumed: 9
 
-BestFS Path: (0,0) (0,1) (0,2) (0,3) 
-BestFS Path Length: 4
-BestFS Energy Consumed: 3
+BestFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (1,1,HUMAN,113) (1,2,HUMAN,112) (1,3,HUMAN,111) (0,3,HUMAN,110) 
+BestFS Path Length: 6
+BestFS Energy Consumed: 5
 
 ----------------------------------------
 Test Case 4:
@@ -61,15 +61,15 @@ SLLW
 LPWL
 LLLE
 
-DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (0,2) (0,2) (0,3) (0,3) (0,3) (1,3) (1,3) (1,3) (2,3) 
-DFS Path Length: 15
-DFS Energy Consumed: 23
+DFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (0,2,HUMAN,113) (0,3,FISH,110) (1,3,HUMAN,107) (1,2,FISH,104) (1,1,BIRD,101) (1,0,HUMAN,98) (2,0,HUMAN,97) (2,1,HUMAN,96) (2,2,HUMAN,95) (2,3,HUMAN,94) 
+DFS Path Length: 12
+DFS Energy Consumed: 21
 
-BFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) 
+BFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (2,1,HUMAN,112) (2,2,HUMAN,111) (2,3,HUMAN,110) 
 BFS Path Length: 6
 BFS Energy Consumed: 5
 
-BestFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) 
+BestFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (2,1,HUMAN,112) (2,2,HUMAN,111) (2,3,HUMAN,110) 
 BestFS Path Length: 6
 BestFS Energy Consumed: 5
 
@@ -80,16 +80,16 @@ SPLLE
 LPPWL
 LLLLE
 
-DFS Path: (0,0) (0,0) (0,0) (1,0) (1,0) (1,0) (2,0) (2,0) (2,0) (2,1) (2,1) (2,1) (2,2) (2,2) (2,2) (2,3) (2,3) (2,3) (2,4) (2,4) (2,4) (1,4) (1,4) (1,4) (0,4) 
-DFS Path Length: 25
-DFS Energy Consumed: 40
+DFS Path: (0,0,HUMAN,115) (0,1,BIRD,112) (0,2,HUMAN,109) (0,3,HUMAN,108) (0,4,HUMAN,107) 
+DFS Path Length: 5
+DFS Energy Consumed: 8
 
-BFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) (2,4) (1,4) (0,4) 
-BFS Path Length: 9
+BFS Path: (0,0,HUMAN,115) (0,1,BIRD,112) (0,2,HUMAN,109) (0,3,HUMAN,108) (0,4,HUMAN,107) 
+BFS Path Length: 5
 BFS Energy Consumed: 8
 
-BestFS Path: (0,0) (1,0) (2,0) (2,1) (2,2) (2,3) (2,4) (1,4) (0,4) 
-BestFS Path Length: 9
+BestFS Path: (0,0,HUMAN,115) (0,1,BIRD,112) (0,2,HUMAN,109) (0,3,HUMAN,108) (0,4,HUMAN,107) 
+BestFS Path Length: 5
 BestFS Energy Consumed: 8
 
 ----------------------------------------
@@ -100,15 +100,15 @@ LPPWL
 LWLWL
 LLLLE
 
-DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (0,2) (0,2) (0,2) (0,3) (0,3) (0,4) (0,4) (0,4) (1,4) (1,4) (1,4) (2,4) (2,4) (2,4) (3,4) 
-DFS Path Length: 21
+DFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (0,2,HUMAN,113) (0,3,HUMAN,112) (0,4,FISH,109) (1,4,HUMAN,106) (1,3,FISH,103) (1,2,BIRD,100) (1,1,BIRD,99) (1,0,HUMAN,96) (2,0,HUMAN,95) (2,1,FISH,92) (2,2,HUMAN,89) (2,3,FISH,86) (2,4,HUMAN,83) (3,4,HUMAN,82) 
+DFS Path Length: 16
 DFS Energy Consumed: 33
 
-BFS Path: (0,0) (1,0) (2,0) (3,0) (3,1) (3,2) (3,3) (3,4) 
+BFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (3,0,HUMAN,112) (3,1,HUMAN,111) (3,2,HUMAN,110) (3,3,HUMAN,109) (3,4,HUMAN,108) 
 BFS Path Length: 8
 BFS Energy Consumed: 7
 
-BestFS Path: (0,0) (1,0) (2,0) (3,0) (3,1) (3,2) (3,3) (3,4) 
+BestFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (3,0,HUMAN,112) (3,1,HUMAN,111) (3,2,HUMAN,110) (3,3,HUMAN,109) (3,4,HUMAN,108) 
 BestFS Path Length: 8
 BestFS Energy Consumed: 7
 
@@ -122,15 +122,15 @@ LLLPLL
 WWLLPL
 LLLLEL
 
-DFS Path: (0,0) (0,0) (0,0) (0,1) (0,1) (0,1) (0,2) (0,2) (0,3) (0,3) (0,3) (0,4) (0,4) (0,4) (0,5) (0,5) (0,5) (1,5) (1,5) (1,5) (2,5) (2,5) (2,5) (3,5) (3,5) (3,5) (4,5) (4,5) (4,5) (5,5) (5,5) (5,5) (5,4) 
-DFS Path Length: 33
-DFS Energy Consumed: 53
+DFS Path: (0,0,HUMAN,115) (0,1,HUMAN,114) (0,2,HUMAN,113) (0,3,FISH,110) (0,4,HUMAN,107) (0,5,HUMAN,106) (1,5,HUMAN,105) (1,4,FISH,102) (1,3,BIRD,99) (1,2,FISH,96) (1,1,BIRD,93) (1,0,HUMAN,90) (2,0,HUMAN,89) (2,1,FISH,86) (2,2,HUMAN,83) (2,3,FISH,80) (2,4,BIRD,77) (2,5,HUMAN,74) (3,5,HUMAN,73) (3,4,HUMAN,72) (3,3,BIRD,69) (3,2,HUMAN,66) (3,1,HUMAN,65) (3,0,HUMAN,64) (4,0,FISH,61) (4,1,FISH,60) (4,2,HUMAN,57) (4,3,HUMAN,56) (4,4,BIRD,53) (4,5,HUMAN,50) (5,5,HUMAN,49) (5,4,HUMAN,48) 
+DFS Path Length: 32
+DFS Energy Consumed: 67
 
-BFS Path: (0,0) (1,0) (2,0) (3,0) (3,1) (3,2) (4,2) (5,2) (5,3) (5,4) 
+BFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (3,0,HUMAN,112) (4,0,FISH,109) (5,0,HUMAN,106) (5,1,HUMAN,105) (5,2,HUMAN,104) (5,3,HUMAN,103) (5,4,HUMAN,102) 
 BFS Path Length: 10
-BFS Energy Consumed: 9
+BFS Energy Consumed: 13
 
-BestFS Path: (0,0) (1,0) (2,0) (3,0) (3,1) (3,2) (4,2) (4,3) (5,3) (5,4) 
+BestFS Path: (0,0,HUMAN,115) (1,0,HUMAN,114) (2,0,HUMAN,113) (3,0,HUMAN,112) (3,1,HUMAN,111) (3,2,HUMAN,110) (4,2,HUMAN,109) (4,3,HUMAN,108) (5,3,HUMAN,107) (5,4,HUMAN,106) 
 BestFS Path Length: 10
 BestFS Energy Consumed: 9
 

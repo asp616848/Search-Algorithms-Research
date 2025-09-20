@@ -1,11 +1,12 @@
 #include "shapeshifter.h"
 
 
-bool BestFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solution, int& final_energy) {
+bool BestFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solution, int& final_energy, int& nodes_explored) {
     auto cmp = [&](const State& a, const State& b){ return heuristic(a,d) > heuristic(b,d); };
     priority_queue<State, vector<State>, decltype(cmp)> open(cmp);
     set<tuple<int,int,Form>> closed;
     open.push(start);
+    nodes_explored = 0;
 
     bool found = false;
     int best_energy = -1;
@@ -16,6 +17,7 @@ bool BestFS(const Dungeon& d, State start, vector<tuple<int,int,Form,int>>& solu
         auto key = make_tuple(cur.x, cur.y, cur.form);
         if (closed.count(key)) continue;
         closed.insert(key);
+        nodes_explored++;
 
         if (GoalTest(cur, d)) {
             if (!found || cur.energy > best_energy) {
