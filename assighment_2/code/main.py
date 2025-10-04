@@ -1,7 +1,7 @@
 import sys
 import random
 from utils import read_input, write_tour, compute_cost
-from heuristics import nearest_neighbor, two_opt
+from heuristics import lin_kernighan
 import time
 
 
@@ -34,40 +34,26 @@ def main():
     buffer = 0.5
 
     try:
-        # single NN + 2-opt
-        now = time.time()
-        time_left = MAX_RUNTIME - (now - overall_start)
-        init_tour = nearest_neighbor(n, dist_matrix, start=random.randint(0, n-1))
-        write_tour(output_file, init_tour)
-        # update best
-        c = compute_cost(init_tour, dist_matrix)
-        if c < best_cost:
-            best_cost = c
-            best_tour = list(init_tour)
-
-        # run 2-opt with time limit guard (leave a small buffer)
-        time_for_local = max(0.0, time_left - buffer)
-        improved_tour = two_opt(init_tour, dist_matrix, time_limit=time_for_local, start_time=time.time())
-        write_tour(output_file, improved_tour)
-        c = compute_cost(improved_tour, dist_matrix)
-        if c < best_cost:
-            best_cost = c
-            best_tour = list(improved_tour)
-
-        # controlled random restarts until time runs out
         while True:
-            attempts += 1
             now = time.time()
             elapsed = now - overall_start
-            if elapsed >= MAX_RUNTIME - buffer:
+            remaining = MAX_RUNTIME - elapsed
+            if remaining <= buffer:
                 break
-            # allocate a small chunk per restart
-            per_restart = min(10.0, MAX_RUNTIME - elapsed - buffer)
-            tour = nearest_neighbor(n, dist_matrix, start=random.randint(0, n-1))
-            # capture start time right before two_opt so the time slice is accurate
-            tour = two_opt(tour, dist_matrix, time_limit=per_restart, start_time=time.time())
+
+            attempts += 1
+            # give the first LK run the majority of the remaining budget, later runs get capped
+            per_attempt = remaining - buffer
+            if attempts > 1:
+                per_attempt = min(per_attempt, 60.0)
+
+            if per_attempt <= 0:
+                break
+
+            seed = random.randint(0, 2**32 - 1)
+            tour = lin_kernighan(dist_matrix, time_limit=per_attempt, seed=seed)
             write_tour(output_file, tour)
-            # update best
+
             c = compute_cost(tour, dist_matrix)
             if c < best_cost:
                 best_cost = c
