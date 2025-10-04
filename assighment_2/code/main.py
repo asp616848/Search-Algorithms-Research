@@ -4,7 +4,6 @@ from utils import read_input, write_tour, compute_cost
 from heuristics import nearest_neighbor, two_opt
 import time
 
-
 def main():
     overall_start = time.time()
     # max runtime in seconds (user target: 300s for 200 nodes)
