@@ -1,10 +1,76 @@
-import random
+import multiprocessing as mp
 import time
+from multiprocessing.pool import Pool
 from typing import List, Sequence, Tuple
 
 import numpy as np
 
 from utils import compute_cost
+
+
+_LS_DIST_MATRIX: np.ndarray | None = None
+_LS_NEIGHBOR_LISTS: np.ndarray | None = None
+
+
+def _compute_population_costs(
+    population: Sequence[List[int]],
+    dist_matrix: np.ndarray,
+) -> np.ndarray:
+    if not population:
+        return np.empty(0, dtype=float)
+
+    tours = np.asarray(population, dtype=int)
+    if tours.ndim == 1:
+        tours = tours.reshape(1, -1)
+
+    next_nodes = np.roll(tours, -1, axis=1)
+    costs = dist_matrix[tours, next_nodes].sum(axis=1)
+    return costs.astype(float)
+
+
+def _ls_worker_init(dist_matrix: np.ndarray, neighbor_lists: np.ndarray) -> None:
+    global _LS_DIST_MATRIX, _LS_NEIGHBOR_LISTS
+    _LS_DIST_MATRIX = dist_matrix
+    _LS_NEIGHBOR_LISTS = neighbor_lists
+
+
+def _ls_worker(job: Tuple[int, List[int], float | None, int]) -> Tuple[int, List[int], float]:
+    idx, tour, time_limit, seed = job
+    assert _LS_DIST_MATRIX is not None and _LS_NEIGHBOR_LISTS is not None
+    rng = np.random.default_rng(seed)
+    refined = _lin_kernighan_refine(tour, _LS_DIST_MATRIX, _LS_NEIGHBOR_LISTS, time_limit, rng)
+    cost = compute_cost(refined, _LS_DIST_MATRIX)
+    return idx, refined, cost
+
+
+def _run_parallel_ls(
+    candidates: Sequence[Tuple[int, List[int], float | None, int]],
+    dist_matrix: np.ndarray,
+    neighbor_lists: np.ndarray,
+    pool: Pool | None,
+) -> List[Tuple[int, List[int], float]]:
+    if not candidates:
+        return []
+
+    if pool is None:
+        results: List[Tuple[int, List[int], float]] = []
+        for idx, tour, time_limit, seed in candidates:
+            rng = np.random.default_rng(seed)
+            refined = _lin_kernighan_refine(tour, dist_matrix, neighbor_lists, time_limit, rng)
+            cost = compute_cost(refined, dist_matrix)
+            results.append((idx, refined, cost))
+        return results
+
+    jobs = [(idx, tour, time_limit, seed) for idx, tour, time_limit, seed in candidates]
+    result_map: dict[int, Tuple[List[int], float]] = {}
+    for idx, refined, cost in pool.imap_unordered(_ls_worker, jobs, chunksize=1):
+        result_map[idx] = (refined, cost)
+
+    ordered: List[Tuple[int, List[int], float]] = []
+    for idx, _, _, _ in candidates:
+        refined, cost = result_map[idx]
+        ordered.append((idx, refined, cost))
+    return ordered
 
 
 # ---------------------------------------------------------------------------
@@ -51,9 +117,7 @@ def run_ga_lin_kernighan(
         tour = list(range(n))
         return tour, [tour]
 
-    if seed is not None:
-        random.seed(seed)
-        np.random.seed(seed % (2**32 - 1))
+    rng = np.random.default_rng(seed)
 
     neighbor_size = neighbor_size or min(25, n - 1)
     neighbor_size = max(1, min(neighbor_size, n - 1))
@@ -61,8 +125,8 @@ def run_ga_lin_kernighan(
 
     deadline = None if time_limit is None else time.time() + max(0.0, time_limit)
 
-    population = _initial_population(dist_matrix, population_size)
-    costs = [compute_cost(t, dist_matrix) for t in population]
+    population = _initial_population(dist_matrix, population_size, rng)
+    costs = _compute_population_costs(population, dist_matrix).tolist()
 
     best_idx = int(np.argmin(costs))
     best_tour = population[best_idx][:]
@@ -73,56 +137,91 @@ def run_ga_lin_kernighan(
     local_search_count = max(1, int(population_size * local_search_fraction))
     tournament_k = max(2, min(6, population_size // 4))
 
-    generation = 0
-    while True:
-        if deadline is not None and time.time() >= deadline:
-            break
+    ctx = mp.get_context("spawn")
+    ls_pool: Pool | None = None
+    ls_worker_count = min(local_search_count, max(1, ctx.cpu_count() or 1))
+    if ls_worker_count > 1:
+        ls_pool = ctx.Pool(
+            processes=ls_worker_count,
+            initializer=_ls_worker_init,
+            initargs=(dist_matrix, neighbor_lists),
+        )
 
-        generation += 1
-
-        ranked = sorted(zip(costs, population), key=lambda x: x[0])
-        elites = [ind[:] for _, ind in ranked[:elite_count]]
-
-        new_population: List[List[int]] = elites[:]
-        new_costs: List[float] = [compute_cost(ind, dist_matrix) for ind in elites]
-
-        ls_applied = 0
-        while len(new_population) < population_size:
+    try:
+        generation = 0
+        while True:
             if deadline is not None and time.time() >= deadline:
                 break
 
-            parent1 = _tournament_select(population, costs, tournament_k)
-            parent2 = _tournament_select(population, costs, tournament_k)
-            child = _order_crossover(parent1, parent2)
-            if random.random() < mutation_rate:
-                _swap_mutation(child)
+            generation += 1
 
-            # Local search (Lin-Kernighan) on a subset of children for exploitation
-            if ls_applied < local_search_count:
-                remaining = None if deadline is None else deadline - time.time()
-                if remaining is None or remaining > 0.05:
-                    ls_budget = None if remaining is None else min(remaining * 0.3, 1.0)
-                    child = _lin_kernighan_refine(child, dist_matrix, neighbor_lists, ls_budget)
-                    ls_applied += 1
+            ranked = sorted(zip(costs, population), key=lambda x: x[0])
+            elites = [ind[:] for _, ind in ranked[:elite_count]]
 
-            child_cost = compute_cost(child, dist_matrix)
-            new_population.append(child)
-            new_costs.append(child_cost)
+            new_population: List[List[int]] = elites[:]
+            new_costs = _compute_population_costs(elites, dist_matrix).tolist()
 
-            if child_cost + 1e-9 < best_cost:
-                best_cost = child_cost
-                best_tour = child[:]
-                progress.append(child[:])
+            ls_applied = 0
+            ls_candidates: List[Tuple[int, List[int], float | None, int]] = []
 
-        population = new_population
-        costs = new_costs
+            while len(new_population) < population_size:
+                if deadline is not None and time.time() >= deadline:
+                    break
 
-        # Optional diversification if stagnation detected
-        if generation % 20 == 0:
-            recent_best = min(costs)
-            if abs(recent_best - best_cost) < 1e-6:
-                population = _inject_diversity(population, dist_matrix, portion=0.2)
-                costs = [compute_cost(t, dist_matrix) for t in population]
+                parent1 = _tournament_select(population, costs, tournament_k, rng)
+                parent2 = _tournament_select(population, costs, tournament_k, rng)
+                child = _order_crossover(parent1, parent2, rng)
+                if float(rng.random()) < mutation_rate:
+                    _swap_mutation(child, rng)
+
+                idx = len(new_population)
+                new_population.append(child)
+
+                if ls_applied < local_search_count:
+                    remaining = None if deadline is None else max(0.0, deadline - time.time())
+                    if remaining is None or remaining > 0.05:
+                        ls_budget = None if remaining is None else min(remaining * 0.3, 1.0)
+                        ls_seed = int(rng.integers(0, 2**63, dtype=np.int64))
+                        ls_candidates.append((idx, child[:], ls_budget, ls_seed))
+                        new_costs.append(float("inf"))
+                        ls_applied += 1
+                        continue
+
+                child_cost = compute_cost(child, dist_matrix)
+                new_costs.append(child_cost)
+                if child_cost + 1e-9 < best_cost:
+                    best_cost = child_cost
+                    best_tour = child[:]
+                    progress.append(child[:])
+
+            if ls_candidates:
+                refined = _run_parallel_ls(
+                    ls_candidates,
+                    dist_matrix,
+                    neighbor_lists,
+                    ls_pool,
+                )
+                for idx, tour_refined, refined_cost in refined:
+                    new_population[idx] = tour_refined
+                    new_costs[idx] = refined_cost
+                    if refined_cost + 1e-9 < best_cost:
+                        best_cost = refined_cost
+                        best_tour = tour_refined[:]
+                        progress.append(tour_refined[:])
+
+            population = new_population
+            costs = new_costs
+
+            # Optional diversification if stagnation detected
+            if generation % 20 == 0:
+                recent_best = min(costs)
+                if abs(recent_best - best_cost) < 1e-6:
+                    population = _inject_diversity(population, dist_matrix, portion=0.2, rng=rng)
+                    costs = _compute_population_costs(population, dist_matrix).tolist()
+    finally:
+        if ls_pool is not None:
+            ls_pool.close()
+            ls_pool.join()
 
     if progress[-1] != best_tour:
         progress.append(best_tour[:])
@@ -135,35 +234,42 @@ def run_ga_lin_kernighan(
 # ---------------------------------------------------------------------------
 
 
-def _initial_population(dist_matrix: np.ndarray, population_size: int) -> List[List[int]]:
+def _initial_population(
+    dist_matrix: np.ndarray, population_size: int, rng: np.random.Generator
+) -> List[List[int]]:
     n = dist_matrix.shape[0]
     population: List[List[int]] = []
 
     # Include one greedy seed
-    start = random.randrange(n)
+    start = int(rng.integers(n))
     greedy = _nearest_neighbor(dist_matrix, start)
     population.append(greedy)
 
     for _ in range(population_size - 1):
-        tour = list(range(n))
-        random.shuffle(tour)
-        population.append(tour)
+        population.append(rng.permutation(n).tolist())
 
     return population
 
 
-def _tournament_select(population: Sequence[List[int]], costs: Sequence[float], k: int) -> List[int]:
+def _tournament_select(
+    population: Sequence[List[int]],
+    costs: Sequence[float],
+    k: int,
+    rng: np.random.Generator,
+) -> List[int]:
     best_idx = None
     for _ in range(k):
-        idx = random.randrange(len(population))
+        idx = int(rng.integers(len(population)))
         if best_idx is None or costs[idx] < costs[best_idx]:
             best_idx = idx
     return population[best_idx][:]
 
 
-def _order_crossover(parent1: List[int], parent2: List[int]) -> List[int]:
+def _order_crossover(
+    parent1: List[int], parent2: List[int], rng: np.random.Generator
+) -> List[int]:
     n = len(parent1)
-    a, b = sorted(random.sample(range(n), 2))
+    a, b = sorted(int(x) for x in rng.choice(n, size=2, replace=False))
     child = [-1] * n
     child[a:b+1] = parent1[a:b+1]
 
@@ -180,20 +286,29 @@ def _order_crossover(parent1: List[int], parent2: List[int]) -> List[int]:
     return child
 
 
-def _swap_mutation(tour: List[int]) -> None:
+def _swap_mutation(tour: List[int], rng: np.random.Generator) -> None:
     if len(tour) < 2:
         return
-    i, j = random.sample(range(len(tour)), 2)
+    i, j = rng.choice(len(tour), size=2, replace=False)
+    i = int(i)
+    j = int(j)
     tour[i], tour[j] = tour[j], tour[i]
 
 
-def _inject_diversity(population: List[List[int]], dist_matrix: np.ndarray, portion: float) -> List[List[int]]:
+def _inject_diversity(
+    population: List[List[int]],
+    dist_matrix: np.ndarray,
+    portion: float,
+    rng: np.random.Generator,
+) -> List[List[int]]:
     n = len(population[0])
     replace_count = int(len(population) * portion)
-    for idx in random.sample(range(len(population)), replace_count):
-        tour = list(range(n))
-        random.shuffle(tour)
-        population[idx] = tour
+    if replace_count <= 0:
+        return population
+
+    selected = rng.choice(len(population), size=replace_count, replace=False)
+    for idx in selected:
+        population[int(idx)] = rng.permutation(n).tolist()
     return population
 
 
@@ -207,6 +322,7 @@ def _lin_kernighan_refine(
     dist_matrix: np.ndarray,
     neighbor_lists: np.ndarray,
     time_limit: float | None,
+    rng: np.random.Generator,
 ) -> List[int]:
     start_time = time.time()
     deadline = None if time_limit is None else start_time + max(0.0, time_limit)
@@ -228,7 +344,7 @@ def _lin_kernighan_refine(
             continue
 
         # No improvement found: apply a double-bridge kick for diversification
-        kicked = _double_bridge_move(best)
+        kicked = _double_bridge_move(best, rng)
         if kicked == best:
             break
         current = kicked
@@ -312,16 +428,14 @@ def _apply_2opt(tour: List[int], i: int, j: int) -> List[int]:
     return new_tour
 
 
-def _double_bridge_move(tour: List[int]) -> List[int]:
+def _double_bridge_move(tour: List[int], rng: np.random.Generator) -> List[int]:
     n = len(tour)
     if n < 8:
-        shuffled = tour[:]
-        random.shuffle(shuffled)
-        return shuffled
+        return rng.permutation(tour).tolist()
 
     attempts = 0
     while attempts < 10:
-        a, b, c, d = sorted(random.sample(range(n), 4))
+        a, b, c, d = sorted(int(x) for x in rng.choice(n, size=4, replace=False))
         attempts += 1
         if a == 0 and d == n - 1:
             continue
