@@ -5,7 +5,7 @@ from multiprocessing.pool import Pool
 
 import numpy as np
 
-from utils import compute_cost
+from utils import compute_cost, write_tour
 
 
 _LS_DIST_MATRIX: np.ndarray | None = None
@@ -48,13 +48,19 @@ def _run_parallel_ls(
     dist_matrix: np.ndarray,
     neighbor_lists: np.ndarray,
     pool: Pool | None,
+    deadline: float | None,
 ) -> list[tuple[int, list[int], float]]:
     if not candidates:
+        return []
+
+    if deadline is not None and time.time() >= deadline:
         return []
 
     if pool is None:
         results: list[tuple[int, list[int], float]] = []
         for idx, tour, time_limit, seed in candidates:
+            if deadline is not None and time.time() >= deadline:
+                break
             rng = np.random.default_rng(seed)
             refined = _lin_kernighan_refine(tour, dist_matrix, neighbor_lists, time_limit, rng)
             cost = compute_cost(refined, dist_matrix)
@@ -63,8 +69,14 @@ def _run_parallel_ls(
 
     jobs = [(idx, tour, time_limit, seed) for idx, tour, time_limit, seed in candidates]
     result_map: dict[int, tuple[list[int], float]] = {}
-    for idx, refined, cost in pool.imap_unordered(_ls_worker, jobs, chunksize=1):
-        result_map[idx] = (refined, cost)
+    try:
+        for idx, refined, cost in pool.imap_unordered(_ls_worker, jobs, chunksize=1):
+            result_map[idx] = (refined, cost)
+            if deadline is not None and time.time() >= deadline:
+                break
+    except KeyboardInterrupt:
+        pool.terminate()
+        raise
 
     ordered: list[tuple[int, list[int], float]] = []
     for idx, _, _, _ in candidates:
@@ -82,34 +94,23 @@ def run_ga_lin_kernighan(
     dist_matrix: np.ndarray,
     time_limit: float | None = None,
     seed: int | None = None,
-    population_size: int = 60,
-    elite_fraction: float = 0.15,
-    mutation_rate: float = 0.2,
+    ants: int = 40,
+    alpha: float = 1.0,
+    beta: float = 3.0,
+    rho: float = 0.1,
+    q0: float = 0.9,
     neighbor_size: int | None = None,
-    local_search_fraction: float = 0.3,
+    local_search_fraction: float = 0.5,
+    output_file: str | None = None,
 ) -> tuple[list[int], list[list[int]]]:
-    """Evolve tours with a GA (exploration) and Lin-Kernighan local search
-    (exploitation). Returns the best tour found along with a list of
-    progressively better tours for logging.
+    """Ant Colony Optimization (ACO) hybridized with Lin-Kernighan (LK) local search.
 
-    Parameters
-    ----------
-    dist_matrix : np.ndarray
-        Symmetric distance matrix of shape (n, n).
-    time_limit : float, optional
-        Seconds available to the GA; `None` means run until convergence.
-    seed : int, optional
-        Random seed for reproducibility.
-    population_size : int, default 60
-        Number of individuals maintained each generation.
-    elite_fraction : float, default 0.15
-        Fraction of top-ranked individuals copied unchanged to the next gen.
-    mutation_rate : float, default 0.2
-        Probability of applying swap mutation to a child.
-    neighbor_size : int, optional
-        Size of candidate neighbor list for local search (default: min(25, n-1)).
-    local_search_fraction : float, default 0.3
-        Portion of the population refined with Lin-Kernighan per generation.
+    This replaces the previous GA. It keeps the external API name so `main.py`
+    can call it without changes. The algorithm constructs ant tours using
+    pheromones and a candidate list, applies LK to a fraction of constructed
+    tours in parallel, and updates pheromones using the best solutions found.
+
+    Returns the best tour and a progress list of improving tours (for logging).
     """
 
     n = dist_matrix.shape[0]
@@ -125,21 +126,31 @@ def run_ga_lin_kernighan(
 
     deadline = None if time_limit is None else time.time() + max(0.0, time_limit)
 
-    population = _initial_population(dist_matrix, population_size, rng)
-    costs = _compute_population_costs(population, dist_matrix).tolist()
+    # Pheromone matrix (symmetric) initialized to a small positive value
+    tau0 = 1.0 / (n * np.mean(dist_matrix))
+    pheromone = np.full((n, n), tau0, dtype=float)
 
-    best_idx = int(np.argmin(costs))
-    best_tour = population[best_idx][:]
-    best_cost = float(costs[best_idx])
-    progress: list[list[int]] = [best_tour[:]]
+    # Seed with a deterministic tour so we always have an initial solution.
+    initial_tour = _nearest_neighbor(dist_matrix, 0)
+    initial_cost = compute_cost(initial_tour, dist_matrix)
 
-    elite_count = max(1, int(population_size * elite_fraction))
-    local_search_count = max(1, int(population_size * local_search_fraction))
-    tournament_k = max(2, min(6, population_size // 4))
+    best_tour: list[int] | None = initial_tour[:]
+    best_cost = float(initial_cost)
+    progress: list[list[int]] = [initial_tour[:]]
+
+    if output_file is not None:
+        try:
+            write_tour(output_file, initial_tour)
+        except Exception:
+            # Ignore I/O errors and continue solving.
+            pass
+
+    ants = max(1, int(ants))
+    ls_count = max(1, int(ants * local_search_fraction))
 
     ctx = mp.get_context("spawn")
     ls_pool: Pool | None = None
-    ls_worker_count = min(local_search_count, max(1, ctx.cpu_count() or 1))
+    ls_worker_count = min(ls_count, max(1, ctx.cpu_count() or 1))
     if ls_worker_count > 1:
         ls_pool = ctx.Pool(
             processes=ls_worker_count,
@@ -147,84 +158,138 @@ def run_ga_lin_kernighan(
             initargs=(dist_matrix, neighbor_lists),
         )
 
+    timed_out = False
+    interrupted = False
+
     try:
-        generation = 0
+        iteration = 0
         while True:
             if deadline is not None and time.time() >= deadline:
+                timed_out = True
                 break
 
-            generation += 1
+            iteration += 1
+            constructed: list[tuple[int, list[int], float]] = []
+            for a in range(ants):
+                if deadline is not None and time.time() >= deadline:
+                    timed_out = True
+                    break
+                seed_a = int(rng.integers(0, 2**63, dtype=np.int64))
+                tour = _construct_ant_tour(
+                    dist_matrix,
+                    pheromone,
+                    neighbor_lists,
+                    alpha,
+                    beta,
+                    q0,
+                    seed_a,
+                )
+                cost = compute_cost(tour, dist_matrix)
+                constructed.append((a, tour, cost))
 
-            ranked = sorted(zip(costs, population), key=lambda x: x[0])
-            elites = [ind[:] for _, ind in ranked[:elite_count]]
+            if not constructed:
+                break
 
-            new_population: list[list[int]] = elites[:]
-            new_costs = _compute_population_costs(elites, dist_matrix).tolist()
+            # Sort by ant index to stabilize ordering
+            constructed.sort(key=lambda x: x[0])
 
-            ls_applied = 0
+            # Apply LK to top ls_count ants (by cost) in parallel
+            constructed_sorted = sorted(constructed, key=lambda x: x[2])
             ls_candidates: list[tuple[int, list[int], float | None, int]] = []
-
-            while len(new_population) < population_size:
+            for pos, (ant_idx, tour, cost) in enumerate(constructed_sorted[:ls_count]):
                 if deadline is not None and time.time() >= deadline:
                     break
+                ls_seed = int(rng.integers(0, 2**63, dtype=np.int64))
+                remaining = None if deadline is None else max(0.0, deadline - time.time())
+                ls_budget = None
+                if remaining is not None and remaining > 0.02:
+                    ls_budget = min(max(remaining * 0.3, 0.05), 1.5)
+                ls_candidates.append((ant_idx, tour[:], ls_budget, ls_seed))
 
-                parent1 = _tournament_select(population, costs, tournament_k, rng)
-                parent2 = _tournament_select(population, costs, tournament_k, rng)
-                child = _order_crossover(parent1, parent2, rng)
-                if float(rng.random()) < mutation_rate:
-                    _swap_mutation(child, rng)
-
-                idx = len(new_population)
-                new_population.append(child)
-
-                if ls_applied < local_search_count:
-                    remaining = None if deadline is None else max(0.0, deadline - time.time())
-                    if remaining is None or remaining > 0.05:
-                        ls_budget = None if remaining is None else min(remaining * 0.3, 1.0)
-                        ls_seed = int(rng.integers(0, 2**63, dtype=np.int64))
-                        ls_candidates.append((idx, child[:], ls_budget, ls_seed))
-                        new_costs.append(float("inf"))
-                        ls_applied += 1
-                        continue
-
-                child_cost = compute_cost(child, dist_matrix)
-                new_costs.append(child_cost)
-                if child_cost + 1e-9 < best_cost:
-                    best_cost = child_cost
-                    best_tour = child[:]
-                    progress.append(child[:])
-
+            refined_results: list[tuple[int, list[int], float]] = []
             if ls_candidates:
-                refined = _run_parallel_ls(
+                refined_results = _run_parallel_ls(
                     ls_candidates,
                     dist_matrix,
                     neighbor_lists,
                     ls_pool,
+                    deadline,
                 )
-                for idx, tour_refined, refined_cost in refined:
-                    new_population[idx] = tour_refined
-                    new_costs[idx] = refined_cost
-                    if refined_cost + 1e-9 < best_cost:
-                        best_cost = refined_cost
-                        best_tour = tour_refined[:]
-                        progress.append(tour_refined[:])
 
-            population = new_population
-            costs = new_costs
+            # Merge refined results back into constructed list
+            refined_map = {idx: (tour, cost) for idx, tour, cost in refined_results}
+            final_solutions: list[tuple[int, list[int], float]] = []
+            for idx, tour, cost in constructed:
+                if idx in refined_map:
+                    tour_ref, c_ref = refined_map[idx]
+                    final_solutions.append((idx, tour_ref, c_ref))
+                else:
+                    final_solutions.append((idx, tour, cost))
 
-            # Optional diversification if stagnation detected
-            if generation % 20 == 0:
-                recent_best = min(costs)
-                if abs(recent_best - best_cost) < 1e-6:
-                    population = _inject_diversity(population, dist_matrix, portion=0.2, rng=rng)
-                    costs = _compute_population_costs(population, dist_matrix).tolist()
+            if deadline is not None and time.time() >= deadline:
+                timed_out = True
+                break
+
+            # Find best ant this iteration
+            for _, tour, cost in final_solutions:
+                if cost + 1e-12 < best_cost:
+                    best_cost = cost
+                    best_tour = tour[:]
+                    progress.append(best_tour[:])
+                    # write immediately so main process / output file shows progress
+                    try:
+                        if output_file is not None:
+                            write_tour(output_file, best_tour)
+                    except Exception:
+                        # Do not crash the solver if writing fails; continue
+                        pass
+
+            # Pheromone evaporation
+            pheromone *= (1.0 - rho)
+
+            # Pheromone deposit: best ant of this iteration (or global best)
+            iter_best = min(final_solutions, key=lambda x: x[2])
+            best_to_deposit = iter_best[1]
+            deposit_cost = float(iter_best[2])
+            if best_tour is not None and best_cost < deposit_cost:
+                best_to_deposit = best_tour
+                deposit_cost = best_cost
+
+            # Add pheromone along tour edges
+            delta = 1.0 / max(1e-9, deposit_cost)
+            n_nodes = len(best_to_deposit)
+            for i in range(n_nodes):
+                a = best_to_deposit[i]
+                b = best_to_deposit[(i + 1) % n_nodes]
+                pheromone[a, b] += delta
+                pheromone[b, a] += delta
+
+            # Optional pheromone bounding to avoid numerical issues
+            pheromone = np.clip(pheromone, 1e-12, 1e12)
+
+            # Stopping check by deadline is at loop top; continue iterations until time runs out
+            if deadline is not None and time.time() >= deadline:
+                timed_out = True
+                break
+    except KeyboardInterrupt:
+        interrupted = True
+        timed_out = True
     finally:
         if ls_pool is not None:
-            ls_pool.close()
-            ls_pool.join()
+            try:
+                if timed_out:
+                    ls_pool.terminate()
+                else:
+                    ls_pool.close()
+            finally:
+                ls_pool.join()
 
-    if progress[-1] != best_tour:
+    # Ensure the last progress element is global best
+    if not progress or progress[-1] != best_tour:
         progress.append(best_tour[:])
+
+    if interrupted:
+        raise KeyboardInterrupt
 
     return best_tour, progress
 
@@ -452,3 +517,54 @@ def _double_bridge_move(tour: list[int], rng: np.random.Generator) -> list[int]:
             return new_tour
 
     return tour[:]
+
+
+def _construct_ant_tour(
+    dist_matrix: np.ndarray,
+    pheromone: np.ndarray,
+    neighbor_lists: np.ndarray,
+    alpha: float,
+    beta: float,
+    q0: float,
+    seed: int,
+) -> list[int]:
+    rng = np.random.default_rng(seed)
+    n = dist_matrix.shape[0]
+
+    visited = np.zeros(n, dtype=bool)
+    tour: list[int] = []
+    current = int(rng.integers(n))
+    tour.append(current)
+    visited[current] = True
+
+    for _ in range(n - 1):
+        # candidate list: neighbors of current not yet visited
+        cand = [int(c) for c in neighbor_lists[current] if not visited[int(c)]]
+        if not cand:
+            # fallback to all unvisited
+            cand = [int(i) for i in range(n) if not visited[i]]
+
+        # compute desirability: tau^alpha * (1/d)^beta
+        taus = np.array([pheromone[current, c] for c in cand], dtype=float)
+        with np.errstate(divide='ignore'):
+            heur = np.array([1.0 / (dist_matrix[current, c] + 1e-12) for c in cand], dtype=float)
+        scores = (taus ** alpha) * (heur ** beta)
+
+        # pseudo-random proportional rule (q0 greedy)
+        if float(rng.random()) < q0:
+            choice_idx = int(np.argmax(scores))
+        else:
+            total = scores.sum()
+            if total <= 0 or np.isfinite(total) and total == 0:
+                choice_idx = int(rng.integers(len(cand)))
+            else:
+                probs = scores / total
+                # choose according to probabilities
+                choice_idx = int(rng.choice(len(cand), p=probs))
+
+        nxt = cand[choice_idx]
+        tour.append(int(nxt))
+        visited[nxt] = True
+        current = int(nxt)
+
+    return tour

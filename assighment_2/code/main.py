@@ -9,7 +9,7 @@ from heuristics import run_ga_lin_kernighan
 def main():
     overall_start = time.time()
     # max runtime in seconds (user target: 300s for 200 nodes)
-    MAX_RUNTIME = 100.0
+    MAX_RUNTIME = 10.0
 
     if len(sys.argv) < 3 or len(sys.argv) > 4:
         print("Usage: python main.py input.txt output.txt [max_seconds]")
@@ -39,28 +39,39 @@ def main():
         available = max(0.0, MAX_RUNTIME - buffer)
         seed = int(np.random.default_rng().integers(0, 2**32, dtype=np.uint32))
         best_from_ga, progress = run_ga_lin_kernighan(
-            dist_matrix, time_limit=available, seed=seed
+            dist_matrix, time_limit=available, seed=seed, output_file=output_file
         )
 
-        for tour in progress:
-            write_tour(output_file, tour)
-            tours_logged += 1
-            last_written = tour
-
-            c = compute_cost(tour, dist_matrix)
-            if c < best_cost:
-                best_cost = c
-                best_tour = list(tour)
-
-        # ensure GA best is captured even if not in progress
-        if best_tour is None and best_from_ga is not None:
-            best_cost = compute_cost(best_from_ga, dist_matrix)
-            best_tour = list(best_from_ga)
-            write_tour(output_file, best_tour)
-            tours_logged += 1
-            last_written = best_tour
+        # Read what's been written to the output file to set bookkeeping
+        try:
+            with open(output_file, 'r') as f:
+                lines = [l.strip() for l in f.readlines() if l.strip()]
+            tours_logged = len(lines)
+            if tours_logged:
+                last_written = list(map(int, lines[-1].split()))
+                best_cost = compute_cost(last_written, dist_matrix)
+                best_tour = last_written[:]
+        except Exception:
+            # if reading fails, fall back to progress returned
+            for tour in progress:
+                c = compute_cost(tour, dist_matrix)
+                if c < best_cost:
+                    best_cost = c
+                    best_tour = list(tour)
 
     finally:
+        if best_tour is None:
+            try:
+                with open(output_file, 'r') as f:
+                    lines = [l.strip() for l in f.readlines() if l.strip()]
+                tours_logged = len(lines)
+                if tours_logged:
+                    last_written = list(map(int, lines[-1].split()))
+                    best_tour = last_written[:]
+                    best_cost = compute_cost(best_tour, dist_matrix)
+            except Exception:
+                pass
+
         # print summary including best cost so user sees it even after Ctrl+C
         end_time = time.time()
         execution_time = end_time - overall_start
