@@ -8,7 +8,7 @@ import time
 def main():
     overall_start = time.time()
     # max runtime in seconds (user target: 300s for 200 nodes)
-    MAX_RUNTIME = 300.0
+    MAX_RUNTIME = 100.0
 
     if len(sys.argv) < 3 or len(sys.argv) > 4:
         print("Usage: python main.py input.txt output.txt [max_seconds]")

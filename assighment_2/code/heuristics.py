@@ -5,7 +5,7 @@ from utils import compute_cost
 
 
 def lin_kernighan(
-    dist_matrix: np.ndarray,
+    dist_matrix: 'np.ndarray',
     time_limit: float | None = None,
     seed: int | None = None,
     neighbor_size: int = 20,
@@ -74,7 +74,7 @@ def lin_kernighan(
     return best_tour
 
 
-def _nearest_neighbor(dist_matrix: np.ndarray, start: int) -> list[int]:
+def _nearest_neighbor(dist_matrix: 'np.ndarray', start: int) -> list[int]:
     n = dist_matrix.shape[0]
     unvisited = np.ones(n, dtype=bool)
     tour = [int(start)]
@@ -90,7 +90,7 @@ def _nearest_neighbor(dist_matrix: np.ndarray, start: int) -> list[int]:
     return tour
 
 
-def _build_positions(tour: list[int]) -> np.ndarray:
+def _build_positions(tour: list[int]) -> 'np.ndarray':
     positions = np.empty(len(tour), dtype=int)
     for idx, node in enumerate(tour):
         positions[node] = idx
@@ -126,10 +126,10 @@ def _apply_2opt(tour: list[int], i: int, j: int) -> list[int]:
 
 def _best_2opt_move(
     tour: list[int],
-    positions: np.ndarray,
-    dist_matrix: np.ndarray,
-    neighbor_lists: np.ndarray,
-) -> tuple[list[int], np.ndarray, float]:
+    positions: 'np.ndarray',
+    dist_matrix: 'np.ndarray',
+    neighbor_lists: 'np.ndarray',
+) -> tuple[list[int], 'np.ndarray', float]:
     n = len(tour)
     best_delta = 0.0
     best_pair: tuple[int, int] | None = None
