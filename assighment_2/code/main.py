@@ -9,7 +9,7 @@ from heuristics import run_ga_lin_kernighan
 def main():
     overall_start = time.time()
     # max runtime in seconds (user target: 300s for 200 nodes)
-    MAX_RUNTIME = 30.0
+    MAX_RUNTIME = 60.0
 
     if len(sys.argv) < 3 or len(sys.argv) > 4:
         print("Usage: python main.py input.txt output.txt [max_seconds]")
