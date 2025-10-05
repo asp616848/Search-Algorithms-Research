@@ -1,4 +1,3 @@
-import random
 import time
 import numpy as np
 from utils import compute_cost

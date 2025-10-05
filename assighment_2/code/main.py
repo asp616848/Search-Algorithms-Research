@@ -1,13 +1,51 @@
 import sys
-import random
+import time
+import os
+import numpy as np
+from multiprocessing import Pool, cpu_count
 from utils import read_input, write_tour, compute_cost
 from heuristics import nearest_neighbor, two_opt
-import time
+
+# Module-level globals used by worker processes (set in worker_init)
+_WORK_DM = None
+_WORK_N = None
+_WORK_RNG = None
+
+
+def worker_init(dm, nnodes, seed_offset):
+    """Initializer for worker processes. Stores the distance matrix and node count
+    in module globals so worker_task can access them without re-passing large args.
+    seed_offset is used to seed a per-worker numpy RNG.
+    """
+    global _WORK_DM, _WORK_N, _WORK_RNG
+    _WORK_DM = dm
+    _WORK_N = nnodes
+    try:
+        _WORK_RNG = np.random.default_rng(int(seed_offset) + os.getpid())
+    except Exception:
+        _WORK_RNG = np.random.default_rng(int(seed_offset))
+
+
+def worker_task(time_slice, seed):
+    """Performs one NN + 2-opt run in a worker process and returns (cost, tour).
+    time_slice: float seconds to allow two_opt to run.
+    seed: integer seed used to pick a start city.
+    """
+    # Access globals set by worker_init
+    global _WORK_DM, _WORK_N, _WORK_RNG
+    if _WORK_DM is None or _WORK_N is None:
+        raise RuntimeError("Worker not initialized with distance matrix")
+    # derive a start city from seed (deterministic, avoids python's random)
+    start = int(int(seed) % int(_WORK_N))
+    tour = nearest_neighbor(_WORK_N, _WORK_DM, start=start)
+    tour = two_opt(tour, _WORK_DM, time_limit=time_slice, start_time=time.time())
+    cost = compute_cost(tour, _WORK_DM)
+    return (cost, tour)
 
 def main():
     overall_start = time.time()
     # max runtime in seconds (user target: 300s for 200 nodes)
-    MAX_RUNTIME = 300.0
+    MAX_RUNTIME = 60.0
 
     if len(sys.argv) < 3 or len(sys.argv) > 4:
         print("Usage: python main.py input.txt output.txt [max_seconds]")
@@ -33,10 +71,12 @@ def main():
     buffer = 0.5
 
     try:
-        # single NN + 2-opt
+        # single NN + 2-opt from a deterministic numpy RNG start
         now = time.time()
         time_left = MAX_RUNTIME - (now - overall_start)
-        init_tour = nearest_neighbor(n, dist_matrix, start=random.randint(0, n-1))
+        rng = np.random.default_rng()
+        init_start = int(rng.integers(0, n))
+        init_tour = nearest_neighbor(n, dist_matrix, start=init_start)
         write_tour(output_file, init_tour)
         # update best
         c = compute_cost(init_tour, dist_matrix)
@@ -53,24 +93,48 @@ def main():
             best_cost = c
             best_tour = list(improved_tour)
 
-        # controlled random restarts until time runs out
-        while True:
-            attempts += 1
-            now = time.time()
-            elapsed = now - overall_start
-            if elapsed >= MAX_RUNTIME - buffer:
-                break
-            # allocate a small chunk per restart
-            per_restart = min(10.0, MAX_RUNTIME - elapsed - buffer)
-            tour = nearest_neighbor(n, dist_matrix, start=random.randint(0, n-1))
-            # capture start time right before two_opt so the time slice is accurate
-            tour = two_opt(tour, dist_matrix, time_limit=per_restart, start_time=time.time())
-            write_tour(output_file, tour)
-            # update best
-            c = compute_cost(tour, dist_matrix)
-            if c < best_cost:
-                best_cost = c
-                best_tour = list(tour)
+        # parallel restarts using multiprocessing.Pool
+        # We'll create tasks that run NN + two_opt for a small time slice.
+        # Use a worker initializer to set globals so we avoid repeatedly sending the dist matrix.
+
+        # how many parallel workers (leave one core free)
+        workers = max(1, cpu_count() - 1)
+        per_restart = 10.0
+        pool = Pool(processes=workers, initializer=worker_init, initargs=(dist_matrix, n, int(rng.integers(1, 1<<30))))
+        try:
+            # submit tasks until time runs out
+            while True:
+                attempts += 1
+                now = time.time()
+                elapsed = now - overall_start
+                if elapsed >= MAX_RUNTIME - buffer:
+                    break
+                time_remaining = MAX_RUNTIME - elapsed - buffer
+                if time_remaining <= 0:
+                    break
+                slice_time = min(per_restart, time_remaining)
+
+                # build seeds for each worker from RNG
+                seeds = [int(x) for x in rng.integers(0, 1<<30, size=workers)]
+                try:
+                    results = pool.starmap(worker_task, [(slice_time, s) for s in seeds])
+                except KeyboardInterrupt:
+                    # allow Ctrl+C to stop workers quickly
+                    pool.terminate()
+                    pool.join()
+                    raise
+
+                for cost, tour in results:
+                    write_tour(output_file, tour)
+                    if cost < best_cost:
+                        best_cost = cost
+                        best_tour = list(tour)
+        finally:
+            try:
+                pool.close()
+                pool.join()
+            except Exception:
+                pass
 
     finally:
         # print summary including best cost so user sees it even after Ctrl+C
