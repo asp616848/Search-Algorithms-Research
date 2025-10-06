@@ -1,0 +1,514 @@
+"""
+Main TSP solver that orchestrates different heuristics with time management
+"""
+import sys
+import time
+import numpy as np
+from pathlib import Path
+
+from utils import read_input, compute_cost, write_tour, is_valid_tour
+from constructive import (
+    nearest_neighbor, 
+    greedy_tour, 
+    savings_algorithm,
+    best_nearest_neighbor
+)
+from local_search import (
+    two_opt_fast,
+    or_opt,
+    lin_kernighan_simple,
+    simulated_annealing
+)
+
+
+class TSPSolver:
+    def __init__(self, input_file, output_file, time_limit):
+        """
+        Initialize TSP solver.
+        
+        Args:
+            input_file: path to input file
+            output_file: path to output file
+            time_limit: maximum time in seconds
+        """
+        self.input_file = input_file
+        self.output_file = output_file
+        self.time_limit = float(time_limit)
+        self.start_time = None
+        
+        # Read input
+        self.metric, self.n, self.dist_matrix = read_input(input_file)
+        
+        # Best solution tracking
+        self.best_tour = None
+        self.best_cost = float('inf')
+        
+        # Clear output file
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, 'w') as f:
+            f.write('')
+    
+    def elapsed_time(self):
+        """Get elapsed time in seconds."""
+        if self.start_time is None:
+            return 0
+        return time.time() - self.start_time
+    
+    def remaining_time(self):
+        """Get remaining time in seconds."""
+        return max(0, self.time_limit - self.elapsed_time())
+    
+    def update_best(self, tour):
+        """Update best solution if tour is better."""
+        if not is_valid_tour(tour, self.n):
+            return False
+        
+        cost = compute_cost(tour, self.dist_matrix)
+        if cost < self.best_cost:
+            self.best_cost = cost
+            self.best_tour = list(tour)
+            write_tour(self.output_file, tour)
+            return True
+        return False
+    
+    def generate_initial_solutions(self):
+        """Generate multiple initial solutions using different constructive heuristics."""
+        print(f"Generating initial solutions for {self.n} cities...")
+        
+        # Allocate up to 20 seconds for initial solutions
+        init_time_budget = min(20, self.time_limit * 0.06)
+        
+        # Try nearest neighbor from multiple starts
+        num_starts = min(self.n, 50) if self.n <= 100 else min(self.n, 30)
+        for i in range(num_starts):
+            if self.elapsed_time() > init_time_budget:
+                break
+            start_city = i % self.n
+            tour = nearest_neighbor(self.dist_matrix, start_city)
+            self.update_best(tour)
+            
+            # Quick 2-opt on first few solutions
+            if i < 5 and self.elapsed_time() < init_time_budget:
+                tour = two_opt_fast(tour, self.dist_matrix, time_limit=1)
+                self.update_best(tour)
+        
+        # Try greedy construction
+        if self.elapsed_time() < init_time_budget:
+            try:
+                tour = greedy_tour(self.dist_matrix)
+                self.update_best(tour)
+                tour = two_opt_fast(tour, self.dist_matrix, time_limit=1)
+                self.update_best(tour)
+            except:
+                pass
+        
+        # Try savings algorithm
+        if self.elapsed_time() < init_time_budget:
+            try:
+                tour = savings_algorithm(self.dist_matrix)
+                self.update_best(tour)
+                tour = two_opt_fast(tour, self.dist_matrix, time_limit=1)
+                self.update_best(tour)
+            except:
+                pass
+        
+        print(f"Initial best cost: {self.best_cost:.2f}")
+        print(f"Time used: {self.elapsed_time():.2f}s")
+    
+    def improve_with_local_search(self):
+        """Improve solution using continuous optimization - NEVER QUIT EARLY."""
+        print("\n" + "="*60)
+        print(f"CONTINUOUS OPTIMIZATION (n={self.n}, time_limit={self.time_limit}s)")
+        print("="*60)
+        
+        current_tour = list(self.best_tour)
+        iteration = 0
+        
+        # Determine strategy based on problem size
+        use_3opt = self.n >= 100  # Use 3-opt for larger instances
+        use_ils = self.n >= 150   # Use Iterated Local Search for very large instances
+        
+        print(f"Strategy: 2-opt={'Yes'}, 3-opt={'Yes' if use_3opt else 'No'}, ILS={'Yes' if use_ils else 'No'}")
+        
+        # Phase 1: Intensive optimization (no time limit - run forever)
+        print("\n" + "="*60)
+        print("PHASE 1: INTENSIVE OPTIMIZATION")
+        print("="*60)
+        
+        while True:  # NEVER STOP - let evaluator kill us
+            iteration += 1
+            
+            if iteration % 10 == 1:
+                print(f"\nIteration {iteration}, elapsed: {self.elapsed_time():.1f}s, remaining: {self.remaining_time():.1f}s, cost: {self.best_cost:.2f}")
+            
+            # Track stagnation
+            if abs(self.best_cost - last_improvement_cost) < 0.01:
+                no_improvement_count += 1
+            else:
+                no_improvement_count = 0
+                last_improvement_cost = self.best_cost
+            
+            # ADAPTIVE EXPLORATION: If stuck for too long, explore more aggressively
+            if no_improvement_count > 15 and self.remaining_time() > 120:
+                print(f"  ⚠ Stuck in local minimum! Exploring... (stagnant for {no_improvement_count} iterations)")
+                
+                # Strategy 1: Large perturbation with SA
+                if no_improvement_count % 3 == 0:
+                    print("    → Large perturbation + Simulated Annealing")
+                    perturbed = self.large_perturbation(current_tour, strength=3)
+                    max_iter = min(5000, int(self.remaining_time() * 100))
+                    explored = simulated_annealing(
+                        perturbed, self.dist_matrix,
+                        initial_temp=300, cooling_rate=0.995,
+                        max_iterations=max_iter
+                    )
+                    improved = two_opt_fast(explored, self.dist_matrix, time_limit=3)
+                    if self.update_best(improved):
+                        current_tour = list(self.best_tour)
+                        print(f"    ✓ Escaped! New best: {self.best_cost:.2f}")
+                        no_improvement_count = 0
+                    else:
+                        current_tour = explored  # Use for continued exploration
+                
+                # Strategy 2: Multi-start with different constructive heuristics
+                elif no_improvement_count % 3 == 1:
+                    print("    → Multi-start nearest neighbor")
+                    best_multistart = None
+                    best_multistart_cost = float('inf')
+                    for start in np.random.choice(self.n, min(15, self.n), replace=False):
+                        if self.remaining_time() < 110:
+                            break
+                        tour = nearest_neighbor(self.dist_matrix, int(start))
+                        tour = two_opt_fast(tour, self.dist_matrix, time_limit=2)
+                        cost = compute_cost(tour, self.dist_matrix)
+                        if cost < best_multistart_cost:
+                            best_multistart = tour
+                            best_multistart_cost = cost
+                    
+                    if self.update_best(best_multistart):
+                        current_tour = list(self.best_tour)
+                        print(f"    ✓ Found better solution: {self.best_cost:.2f}")
+                        no_improvement_count = 0
+                    else:
+                        current_tour = best_multistart  # Explore this region
+                
+                # Strategy 3: Greedy tour + optimization
+                else:
+                    print("    → Greedy construction + optimization")
+                    greedy = greedy_tour(self.dist_matrix)
+                    greedy = two_opt_fast(greedy, self.dist_matrix, time_limit=3)
+                    greedy = or_opt(greedy, self.dist_matrix, max_iterations=100)
+                    if self.update_best(greedy):
+                        current_tour = list(self.best_tour)
+                        print(f"    ✓ Greedy found better: {self.best_cost:.2f}")
+                        no_improvement_count = 0
+                
+                continue  # Skip regular optimization this iteration
+            
+            # REGULAR PERIODIC EXPLORATION: Every 20 iterations, do lighter exploration
+            if iteration % 20 == 0 and self.remaining_time() > 120:
+                print(f"  🔍 Periodic exploration (iteration {iteration})")
+                
+                # Try savings algorithm
+                if iteration % 40 == 0:
+                    print("    → Savings algorithm")
+                    savings = savings_algorithm(self.dist_matrix)
+                    savings = two_opt_fast(savings, self.dist_matrix, time_limit=2)
+                    self.update_best(savings)
+                
+                # Try simulated annealing from current best
+                else:
+                    print("    → Simulated annealing from current best")
+                    max_iter = min(3000, int(self.remaining_time() * 50))
+                    explored = simulated_annealing(
+                        current_tour, self.dist_matrix,
+                        initial_temp=200, cooling_rate=0.997,
+                        max_iterations=max_iter
+                    )
+                    if self.update_best(explored):
+                        current_tour = list(self.best_tour)
+                        print(f"    ✓ Improved to {self.best_cost:.2f}")
+            
+            # INTENSIVE LOCAL SEARCH: Standard optimization moves
+            # 2-opt is the workhorse
+            time_for_2opt = min(8, max(1, self.remaining_time() - 100))
+            improved_tour = two_opt_fast(current_tour, self.dist_matrix, time_limit=time_for_2opt)
+            if self.update_best(improved_tour):
+                current_tour = list(self.best_tour)
+                if iteration % 10 == 0:
+                    print(f"  ✓ 2-opt improved to {self.best_cost:.2f}")
+            
+            # Or-opt every 5 iterations
+            if iteration % 5 == 0 and self.remaining_time() > 110:
+                max_iter = min(100, int((self.remaining_time() - 100) * 5))
+                improved_tour = or_opt(current_tour, self.dist_matrix, max_iterations=max_iter)
+                if self.update_best(improved_tour):
+                    current_tour = list(self.best_tour)
+            
+            # Lin-Kernighan every 15 iterations (more frequent)
+            if iteration % 15 == 0 and self.remaining_time() > 115:
+                max_iter = min(50, int((self.remaining_time() - 100) * 2))
+                improved_tour = lin_kernighan_simple(current_tour, self.dist_matrix, max_iterations=max_iter)
+                if self.update_best(improved_tour):
+                    current_tour = list(self.best_tour)
+                    print(f"  ✓ Lin-Kernighan improved to {self.best_cost:.2f}")
+        
+        print(f"\n✓ Phase 1 complete. Best cost: {self.best_cost:.2f}")
+        print(f"  Time elapsed: {self.elapsed_time():.1f}s, remaining: {self.remaining_time():.1f}s")
+        print(f"  Completed {iteration} optimization iterations")
+        
+        # Phase 2: AGGRESSIVE EXPLORATION - last ~100 seconds
+        print("\n" + "="*60)
+        print("PHASE 2: AGGRESSIVE EXPLORATION TO ESCAPE LOCAL MINIMA (~100s)")
+        print("="*60)
+        
+        exploration_iteration = 0
+        best_cost_before_exploration = self.best_cost
+        stagnant_count = 0
+        last_cost = self.best_cost
+        
+        while self.remaining_time() > 5:
+            exploration_iteration += 1
+            
+            if exploration_iteration % 5 == 1 or exploration_iteration <= 15:
+                print(f"\nExploration {exploration_iteration}, remaining: {self.remaining_time():.1f}s, cost: {self.best_cost:.2f}")
+            
+            # Track if we're stuck
+            if abs(self.best_cost - last_cost) < 0.01:
+                stagnant_count += 1
+            else:
+                stagnant_count = 0
+                last_cost = self.best_cost
+            
+            # Increase perturbation strength if stuck
+            perturbation_strength = 2 + (stagnant_count // 10)
+            
+            did_something = False
+            
+            # Strategy 1: High-temperature Simulated Annealing
+            if self.remaining_time() > 25:
+                if exploration_iteration <= 15 or exploration_iteration % 4 == 1:
+                    print(f"  → High-temp SA (stagnant: {stagnant_count})...")
+                # Higher initial temperature and slower cooling for more exploration
+                initial_temp = 500 + (stagnant_count * 50)
+                max_iter = min(15000, int(self.remaining_time() * 400))
+                improved_tour = simulated_annealing(
+                    current_tour,
+                    self.dist_matrix,
+                    initial_temp=initial_temp,
+                    cooling_rate=0.9992,
+                    max_iterations=max_iter
+                )
+                if self.update_best(improved_tour):
+                    current_tour = list(self.best_tour)
+                    print(f"  ✓ Improved to {self.best_cost:.2f}")
+                else:
+                    current_tour = improved_tour  # Keep exploring this region
+                did_something = True
+            
+            # Strategy 2: Variable-strength perturbations + intensive optimization
+            if self.remaining_time() > 20:
+                if exploration_iteration <= 15 or exploration_iteration % 4 == 2:
+                    print(f"  → Perturbation (strength {perturbation_strength}) + optimization...")
+                
+                # Try multiple perturbations
+                best_perturbed = None
+                best_perturbed_cost = float('inf')
+                
+                for _ in range(3):  # Try 3 different perturbations
+                    if self.remaining_time() < 15:
+                        break
+                    
+                    perturbed = self.large_perturbation(self.best_tour, strength=perturbation_strength)
+                    time_for_opt = min(4, max(1, self.remaining_time() - 12))
+                    improved = two_opt_fast(perturbed, self.dist_matrix, time_limit=time_for_opt)
+                    improved = or_opt(improved, self.dist_matrix, max_iterations=50)
+                    
+                    cost = compute_cost(improved, self.dist_matrix)
+                    if cost < best_perturbed_cost:
+                        best_perturbed = improved
+                        best_perturbed_cost = cost
+                
+                if self.update_best(best_perturbed):
+                    current_tour = list(self.best_tour)
+                    print(f"  ✓ Improved to {self.best_cost:.2f}")
+                did_something = True
+            
+            # Strategy 3: Diversified multi-start
+            if self.remaining_time() > 25:
+                if exploration_iteration <= 15 or exploration_iteration % 4 == 3:
+                    print("  → Diversified multi-start...")
+                
+                # Try different construction heuristics
+                constructions = []
+                
+                # Nearest neighbor from random starts
+                for start in np.random.choice(self.n, min(8, self.n), replace=False):
+                    if self.remaining_time() < 15:
+                        break
+                    tour = nearest_neighbor(self.dist_matrix, int(start))
+                    constructions.append(tour)
+                
+                # Greedy
+                if self.remaining_time() > 18:
+                    constructions.append(greedy_tour(self.dist_matrix))
+                
+                # Savings
+                if self.remaining_time() > 18:
+                    constructions.append(savings_algorithm(self.dist_matrix))
+                
+                # Optimize each construction
+                for tour in constructions:
+                    if self.remaining_time() < 10:
+                        break
+                    tour = two_opt_fast(tour, self.dist_matrix, time_limit=2)
+                    if self.update_best(tour):
+                        current_tour = list(self.best_tour)
+                        print(f"  ✓ Improved to {self.best_cost:.2f}")
+                
+                did_something = True
+            
+            # Strategy 4: Deep Lin-Kernighan exploration
+            if self.remaining_time() > 20:
+                if exploration_iteration <= 15 or exploration_iteration % 4 == 0:
+                    print("  → Lin-Kernighan exploration...")
+                max_iter = min(100, int(self.remaining_time() * 3))
+                improved = lin_kernighan_simple(current_tour, self.dist_matrix, max_iterations=max_iter)
+                if self.update_best(improved):
+                    current_tour = list(self.best_tour)
+                    print(f"  ✓ Improved to {self.best_cost:.2f}")
+                did_something = True
+            
+            # If nothing executed or really low on time, break
+            if not did_something or self.remaining_time() < 8:
+                print(f"  Exploration complete at iteration {exploration_iteration}")
+                break
+        
+        # Final intensive optimization with all remaining time
+        final_time = max(1, self.remaining_time() - 1)
+        if final_time > 2:
+            print(f"\n→ Final intensive optimization ({final_time:.1f}s)...")
+            # 2-opt
+            improved_tour = two_opt_fast(self.best_tour, self.dist_matrix, time_limit=final_time * 0.7)
+            if self.update_best(improved_tour):
+                print(f"  ✓ 2-opt improved to {self.best_cost:.2f}")
+            
+            # Or-opt with remaining time
+            if self.remaining_time() > 1:
+                max_iter = min(200, int(self.remaining_time() * 100))
+                improved = or_opt(self.best_tour, self.dist_matrix, max_iterations=max_iter)
+                if self.update_best(improved):
+                    print(f"  ✓ Or-opt improved to {self.best_cost:.2f}")
+        
+        improvement = best_cost_before_exploration - self.best_cost
+        print(f"\n✓ Phase 2 complete. Improvement: {improvement:.2f}")
+        print(f"✓ Completed {exploration_iteration} exploration iterations")
+        print(f"\n{'='*60}")
+        print(f"FINAL BEST COST: {self.best_cost:.2f}")
+        print(f"{'='*60}")
+    
+    def large_perturbation(self, tour, strength=2):
+        """Apply large perturbation to escape local minima. Strength controls intensity."""
+        tour = list(tour)
+        n = len(tour)
+        
+        # Apply multiple random changes based on strength
+        for _ in range(strength):
+            choice = np.random.randint(0, 4)
+            
+            if choice == 0:
+                # Reverse a large segment
+                segment_size = np.random.randint(n // 4, n // 2)
+                i = np.random.randint(0, n - segment_size)
+                tour[i:i+segment_size] = reversed(tour[i:i+segment_size])
+            
+            elif choice == 1:
+                # Swap two large segments
+                size1 = np.random.randint(3, max(4, n // 4))
+                size2 = np.random.randint(3, max(4, n // 4))
+                i = np.random.randint(0, n - size1)
+                j = np.random.randint(0, n - size2)
+                if i != j and not (i < j < i + size1) and not (j < i < j + size2):
+                    seg1 = tour[i:i+size1]
+                    seg2 = tour[j:j+size2]
+                    if i < j:
+                        tour = tour[:i] + seg2 + tour[i+size1:j] + seg1 + tour[j+size2:]
+                    else:
+                        tour = tour[:j] + seg1 + tour[j+size2:i] + seg2 + tour[i+size1:]
+            
+            elif choice == 2:
+                # Shuffle a subsection
+                size = np.random.randint(n // 5, max(n // 5 + 1, n // 3))
+                i = np.random.randint(0, n - size)
+                subsection = list(tour[i:i+size])
+                np.random.shuffle(subsection)
+                tour[i:i+size] = subsection
+            
+            else:
+                # Multiple 2-opt style moves
+                num_moves = max(5, n // 10)
+                for _ in range(num_moves):
+                    i = np.random.randint(0, max(1, n - 3))
+                    j = np.random.randint(i + 2, n)
+                    if j > i + 1:
+                        tour[i+1:j+1] = reversed(tour[i+1:j+1])
+        
+        return tour
+    
+    def solve(self):
+        """Main solving routine."""
+        self.start_time = time.time()
+        
+        print("="*60)
+        print(f"TSP SOLVER - {self.metric} instance with {self.n} cities")
+        print(f"Time limit: {self.time_limit} seconds")
+        print("="*60)
+        
+        try:
+            # Generate initial solutions
+            self.generate_initial_solutions()
+            
+            # Improve with two-phase local search
+            if self.remaining_time() > 10:
+                self.improve_with_local_search()
+            
+            # Final report
+            if self.best_tour is not None:
+                print(f"\n{'='*60}")
+                print(f"✓ SOLUTION FOUND!")
+                print(f"  Final tour cost: {self.best_cost:.6f}")
+                print(f"  Total time used: {self.elapsed_time():.2f} seconds")
+                print(f"{'='*60}")
+            else:
+                print("\n✗ No valid solution found!")
+                
+        except KeyboardInterrupt:
+            print("\n\n⚠ Interrupted by user")
+            if self.best_tour:
+                print(f"  Best solution found: {self.best_cost:.6f}")
+        except Exception as e:
+            print(f"\n✗ Error during solving: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return self.best_tour, self.best_cost
+
+
+def main():
+    if len(sys.argv) != 4:
+        print("Usage: python main.py <input_file> <output_file> <time_limit>")
+        sys.exit(1)
+    
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    time_limit = float(sys.argv[3])
+    
+    # Create solver and solve
+    solver = TSPSolver(input_file, output_file, time_limit)
+    tour, cost = solver.solve()
+    
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
