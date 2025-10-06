@@ -1,0 +1,6 @@
+EUCLIDEAN_50.txt: status=exited(1), time=19.70s, last_cost=577.236500
+EUCLIDEAN_100.txt: status=exited(1), time=19.70s, last_cost=825.986400
+EUCLIDEAN_200.txt: status=finished, time=19.65s, last_cost=1101.250600
+NON_EUCLIDEAN_50.txt: status=exited(1), time=19.69s, last_cost=618.263000
+NON_EUCLIDEAN_100.txt: status=exited(1), time=19.70s, last_cost=846.471900
+NON_EUCLIDEAN_200.txt: status=finished, time=19.66s, last_cost=1155.947200
