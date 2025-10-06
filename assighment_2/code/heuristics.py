@@ -1,4 +1,5 @@
 import multiprocessing as mp
+import signal
 import time
 from multiprocessing.pool import Pool
 # Use built-in generics (list/tuple/dict) instead of the typing module
@@ -32,6 +33,8 @@ def _ls_worker_init(dist_matrix: np.ndarray, neighbor_lists: np.ndarray) -> None
     global _LS_DIST_MATRIX, _LS_NEIGHBOR_LISTS
     _LS_DIST_MATRIX = dist_matrix
     _LS_NEIGHBOR_LISTS = neighbor_lists
+    # Ignore CTRL_C_EVENT in worker processes - let parent handle it
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 def _ls_worker(job: tuple[int, list[int], float | None, int]) -> tuple[int, list[int], float]:
@@ -74,14 +77,19 @@ def _run_parallel_ls(
             result_map[idx] = (refined, cost)
             if deadline is not None and time.time() >= deadline:
                 break
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, Exception) as e:
+        # Terminate pool immediately on interrupt or error
         pool.terminate()
-        raise
+        pool.join()
+        if isinstance(e, KeyboardInterrupt):
+            raise
+        # For other exceptions, continue with what we have so far
 
     ordered: list[tuple[int, list[int], float]] = []
     for idx, _, _, _ in candidates:
-        refined, cost = result_map[idx]
-        ordered.append((idx, refined, cost))
+        if idx in result_map:
+            refined, cost = result_map[idx]
+            ordered.append((idx, refined, cost))
     return ordered
 
 
@@ -160,6 +168,9 @@ def run_ga_lin_kernighan(
 
     timed_out = False
     interrupted = False
+
+    # Store original signal handler
+    original_sigint_handler = signal.getsignal(signal.SIGINT)
 
     try:
         iteration = 0
@@ -275,14 +286,23 @@ def run_ga_lin_kernighan(
         interrupted = True
         timed_out = True
     finally:
+        # Restore original signal handler
+        signal.signal(signal.SIGINT, original_sigint_handler)
+        
         if ls_pool is not None:
             try:
-                if timed_out:
+                if interrupted or timed_out:
                     ls_pool.terminate()
                 else:
                     ls_pool.close()
-            finally:
                 ls_pool.join()
+            except Exception:
+                # Ensure pool is terminated even if join fails
+                try:
+                    ls_pool.terminate()
+                    ls_pool.join()
+                except Exception:
+                    pass
 
     # Ensure the last progress element is global best
     if not progress or progress[-1] != best_tour:

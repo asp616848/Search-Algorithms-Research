@@ -1,4 +1,5 @@
 import sys
+import signal
 import time
 
 import numpy as np
@@ -6,10 +7,25 @@ import numpy as np
 from utils import read_input, write_tour, compute_cost
 from heuristics import run_ga_lin_kernighan
 
+
+# Global flag for graceful shutdown
+interrupted = False
+
+
+def signal_handler(sig, frame):
+    """Handle Ctrl+C gracefully"""
+    global interrupted
+    interrupted = True
+    print("\n\nInterrupt received. Cleaning up and saving best solution...", file=sys.stderr)
+    # Don't exit immediately - let the finally block handle cleanup
+
 def main():
+    # Set up signal handler for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    
     overall_start = time.time()
     # max runtime in seconds (user target: 300s for 200 nodes)
-    MAX_RUNTIME = 100.0
+    MAX_RUNTIME = 10.0
 
     if len(sys.argv) < 3 or len(sys.argv) > 4:
         print("Usage: python main.py input.txt output.txt [max_seconds]")
@@ -38,6 +54,8 @@ def main():
     try:
         available = max(0.0, MAX_RUNTIME - buffer)
         seed = int(np.random.default_rng().integers(0, 2**32, dtype=np.uint32))
+        # seed = 1934124118
+        print(f"Using random seed: {seed}")
         best_from_ga, progress = run_ga_lin_kernighan(
             dist_matrix, time_limit=available, seed=seed, output_file=output_file
         )
@@ -58,6 +76,9 @@ def main():
                 if c < best_cost:
                     best_cost = c
                     best_tour = list(tour)
+    except KeyboardInterrupt:
+        # Catch the interrupt here so we can still save results
+        print("\nKeyboardInterrupt caught in main", file=sys.stderr)
 
     finally:
         if best_tour is None:
