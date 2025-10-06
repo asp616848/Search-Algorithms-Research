@@ -77,7 +77,7 @@ def main():
         (str(code_dir / '..' / 'NON_EUCLIDEAN_200.txt'), str(code_dir / 'a/output_NE200.txt')),
     ]
 
-    TIMEOUT = int(os.environ.get('RUN_TIMEOUT', '20'))
+    TIMEOUT = int(os.environ.get('RUN_TIMEOUT', '100'))
 
     summary_lines = []
 
