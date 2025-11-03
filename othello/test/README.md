@@ -169,7 +169,7 @@ Rank   Bot             Tested   Agrees   Differs   Consensus%
 - StrongBot compiled
 
 **Optional (for move quality analysis):**
-- Edax engine (compile with: `cd ../edax-reversi/src && make build ARCH=x64-modern`)
+- Edax engine (compile with: `cd ../edax-reversi/src && make build ARCH=x86-64-v3`)
 - Egaroucid engine
 
 ## Tips for Improvement

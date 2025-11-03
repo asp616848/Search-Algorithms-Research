@@ -72,12 +72,27 @@ elif [ -d "../edax-reversi/src" ]; then
     if [[ "$response" =~ ^[Yy]$ ]]; then
         echo "  [→] Compiling Edax..."
         cd ../edax-reversi/src
-        make build ARCH=x64-modern || {
-            echo "  [!] Failed to compile Edax. Continuing without it..."
-        }
+        
+        # Create bin directory if it doesn't exist
+        mkdir -p ../bin
+        
+        # Try different architectures based on system
+        if make build ARCH=x86-64-v3 2>/dev/null; then
+            echo "  [✓] Edax compiled with x86-64-v3"
+            cd ../bin && ln -sf lEdax-x86-64-v3 edax
+        elif make build ARCH=x86-64-v2 2>/dev/null; then
+            echo "  [✓] Edax compiled with x86-64-v2"
+            cd ../bin && ln -sf lEdax-x86-64-v2 edax
+        elif make build ARCH=x86-64 2>/dev/null; then
+            echo "  [✓] Edax compiled with x86-64"
+            cd ../bin && ln -sf lEdax-x86-64 edax
+        else
+            echo "  [!] Failed to compile Edax with any architecture. Continuing without it..."
+        fi
+        
         cd "$SCRIPT_DIR"
         if [ -f "../edax-reversi/bin/edax" ]; then
-            echo "  [✓] Edax compiled successfully"
+            echo "  [✓] Edax available for testing"
         fi
     else
         echo "  [!] Skipping Edax. Move quality analysis will be limited."

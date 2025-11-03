@@ -58,7 +58,7 @@ def analyze_position(moves):
         except Exception as e:
             print(f"  Edax         : [error: {e}]")
     else:
-        print(f"  Edax         : [not available - compile with: cd ../edax-reversi/src && make build ARCH=x64-modern]")
+        print(f"  Edax         : [not available - compile with: cd ../edax-reversi/src && make build ARCH=x86-64-v3]")
     
     # Try Egaroucid
     if os.path.exists(EGAROUCID_PATH):

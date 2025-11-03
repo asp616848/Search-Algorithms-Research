@@ -19,7 +19,7 @@ from pathlib import Path
 DESDEMONA = "../Desdemona/bin/Desdemona"
 EDAX_PATH = "../edax-reversi/bin/edax"
 EGAROUCID_PATH = "../Egaroucid/bin/Egaroucid_for_Console.out"
-GAMES_PER_MATCHUP = 10
+GAMES_PER_MATCHUP = 5  # Reduced from 10 for faster testing
 
 # Test positions for move quality analysis (various game stages)
 TEST_POSITIONS = [

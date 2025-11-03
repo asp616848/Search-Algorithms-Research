@@ -134,7 +134,16 @@ The move quality analysis tests these 5 positions:
 - StrongBot compiled (`cd . && make`)
 
 ### Optional (for move quality analysis)
-- **Edax**: Compile with `cd ../edax-reversi/src && make build ARCH=x64-modern`
+- **Edax**: Compile with:
+  ```bash
+  cd ../edax-reversi/src
+  # Try in order until one works:
+  make build ARCH=x86-64-v3  # Modern CPUs (2015+)
+  # OR
+  make build ARCH=x86-64-v2  # Older CPUs
+  # OR  
+  make build ARCH=x86-64     # Any x86-64 CPU
+  ```
 - **Egaroucid**: Already available if `../Egaroucid/bin/Egaroucid_for_Console.out` exists
 
 ## Architecture
@@ -252,7 +261,12 @@ GAMES_PER_MATCHUP = 20  # More games = more accurate
 ### "Edax not found"
 ```bash
 cd ../edax-reversi/src
-make build ARCH=x64-modern
+# Try these in order until one works:
+make build ARCH=x86-64-v3  # For modern CPUs (recommended)
+# If that fails:
+make build ARCH=x86-64-v2  # For older CPUs
+# If that fails:
+make build ARCH=x86-64     # Basic build (slowest but works on all x86-64)
 ```
 
 ### "MyBot compilation failed"
