@@ -80,19 +80,30 @@ class DesdemonaBot(BotInterface):
     def play_game(self, opponent, as_black=True):
         """Play a game via Desdemona"""
         try:
+            # Set up environment for Desdemona
+            env = os.environ.copy()
+            desdemona_base = os.path.abspath("../Desdemona")
+            env["LD_LIBRARY_PATH"] = f"{desdemona_base}/lib:" + env.get("LD_LIBRARY_PATH", "")
+            
+            # Convert bot paths to absolute paths
+            bot1_path = os.path.abspath(self.path)
+            bot2_path = os.path.abspath(opponent.path)
+            
             if as_black:
                 result = subprocess.run(
-                    [DESDEMONA, self.path, opponent.path],
+                    [DESDEMONA, bot1_path, bot2_path],
                     capture_output=True,
                     text=True,
-                    timeout=300
+                    timeout=300,
+                    env=env
                 )
             else:
                 result = subprocess.run(
-                    [DESDEMONA, opponent.path, self.path],
+                    [DESDEMONA, bot2_path, bot1_path],
                     capture_output=True,
                     text=True,
-                    timeout=300
+                    timeout=300,
+                    env=env
                 )
             
             match = re.search(r'BLACK: (\d+)\s+RED: (\d+)', result.stdout)
