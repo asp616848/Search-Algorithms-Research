@@ -1,3 +1,4 @@
+import signal
 import sys
 import time
 
@@ -6,10 +7,26 @@ import numpy as np
 from utils import read_input, write_tour, compute_cost
 from heuristics import run_ga_lin_kernighan
 
+# Global flag to track if timeout was triggered
+_timeout_triggered = False
+
+def timeout_handler(signum, frame):
+    """Handle timeout signal by setting a flag and raising an exception"""
+    global _timeout_triggered
+    _timeout_triggered = True
+    raise TimeoutError("Execution time limit exceeded")
+
+def term_handler(signum, frame):
+    """Handle termination signal gracefully"""
+    global _timeout_triggered
+    _timeout_triggered = True
+    raise KeyboardInterrupt("Process terminated by signal")
+
 def main():
+    global _timeout_triggered
     overall_start = time.time()
     # max runtime in seconds (user target: 300s for 200 nodes)
-    MAX_RUNTIME = 20.0
+    MAX_RUNTIME = 310.0
 
     if len(sys.argv) < 3 or len(sys.argv) > 4:
         print("Usage: python main.py input.txt output.txt [max_seconds]")
@@ -21,6 +38,14 @@ def main():
             MAX_RUNTIME = float(sys.argv[3])
         except ValueError:
             pass
+
+    # Set up signal handlers for timeout and termination
+    signal.signal(signal.SIGTERM, term_handler)
+    signal.signal(signal.SIGALRM, timeout_handler)
+    
+    # Set alarm for hard timeout (with a small buffer)
+    timeout_seconds = int(MAX_RUNTIME + 1)
+    signal.alarm(timeout_seconds)
 
     # Read input
     metric, n, dist_matrix = read_input(input_file)
@@ -59,7 +84,15 @@ def main():
                     best_cost = c
                     best_tour = list(tour)
 
+    except (KeyboardInterrupt, TimeoutError) as e:
+        if isinstance(e, TimeoutError) or _timeout_triggered:
+            print("Timeout reached, stopping execution...")
+        else:
+            print("Process interrupted...")
     finally:
+        # Cancel any remaining alarm
+        signal.alarm(0)
+        
         if best_tour is None:
             try:
                 with open(output_file, 'r') as f:

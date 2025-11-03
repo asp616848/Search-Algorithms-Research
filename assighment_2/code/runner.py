@@ -2,6 +2,7 @@ import subprocess
 import os
 import sys
 import time
+import signal
 from pathlib import Path
 
 # This runner is designed to be executed from the repository root or the code/ folder.
@@ -77,7 +78,7 @@ def main():
         (str(code_dir / '..' / 'NON_EUCLIDEAN_200.txt'), str(code_dir / 'a/output_NE200.txt')),
     ]
 
-    TIMEOUT = int(os.environ.get('RUN_TIMEOUT', '100'))
+    TIMEOUT = int(os.environ.get('RUN_TIMEOUT', '300'))
 
     summary_lines = []
 
@@ -104,8 +105,19 @@ def main():
             retcode = proc.returncode
             status = 'finished' if retcode == 0 else f'exited({retcode})'
         except subprocess.TimeoutExpired:
-            proc.kill()
-            status = 'timeout'
+            # First, try to terminate gracefully with SIGTERM
+            print(f"Timeout reached for {inp_p.name}, sending SIGTERM...")
+            proc.terminate()
+            try:
+                # Wait up to 5 seconds for graceful shutdown
+                proc.wait(timeout=5)
+                status = 'timeout-terminated'
+            except subprocess.TimeoutExpired:
+                # If still running, force kill
+                print(f"Process didn't terminate gracefully, sending SIGKILL...")
+                proc.kill()
+                proc.wait()
+                status = 'timeout-killed'
         except FileNotFoundError as e:
             status = f'file-not-found: {e}'
         except Exception as e:
