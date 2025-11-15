@@ -2,7 +2,9 @@
 
 cd /home/abhi/College/SMAI/Search-Algorithms-Research/othello/Desdemona
 
-chmod +x bin/Desdemona && ./bin/Desdemona bots/RandomBot/RandomBot.so bots/MyBot/bot.so
+chmod +x bin/Desdemona
+
+./bin/Desdemona bots/RandomBot/RandomBot.so bots/MyBot/bot.so
 
 <!-- By convention, the first bot is BLACK and the second RED. -->
 
