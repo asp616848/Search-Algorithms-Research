@@ -6,6 +6,9 @@ chmod +x bin/Desdemona
 
 ./bin/Desdemona bots/RandomBot/RandomBot.so bots/MyBot/bot.so
 
+./bin/Desdemona bots/bestBot/bot.so bots/MyBot/bot.so   -- red
+./bin/Desdemona bots/MyBot/bot.so bots/bestBot/bot.so   -- black
+
 <!-- By convention, the first bot is BLACK and the second RED. -->
 
 test:
