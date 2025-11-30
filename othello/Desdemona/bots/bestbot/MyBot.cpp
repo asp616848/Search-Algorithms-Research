@@ -1,6 +1,6 @@
 /*
- * MyBot.cpp - Ultimate Othello Bot (Optimized)
- * Advanced AI with fast evaluation, PVS, and enhanced heuristics
+ * MyBot.cpp - Elite Othello Bot
+ * Advanced AI with Negamax, PVS, Transposition Tables, and comprehensive evaluation
  */
 
 #include "Othello.h"
@@ -23,30 +23,30 @@ public:
     virtual Move play(const OthelloBoard& board);
 
 private:
-    static const int INF = 1000000000;
-    static const int WIN_SCORE = 100000000;
-    static const int TT_SIZE = (1 << 21);  // 2M entries
+    static const int INF = 100000000;
+    static const int WIN_SCORE = 10000000;
+    static const int TT_SIZE = (1 << 20);
 
     struct TTEntry {
         uint64_t hash;
-        int16_t depth;
+        int depth;
         int value;
-        uint8_t flag;
-        int8_t bestX, bestY;
+        int flag;
+        int bestX, bestY;
     };
 
     TTEntry* transTable;
     uint64_t zobristTable[8][8][3];
-    uint64_t zobristTurn;
+    uint64_t zobristBlackTurn;
 
-    int weights[4][8][8];
+    int weights[3][8][8];
     int historyTable[2][8][8];
     int killerX[64][2];
     int killerY[64][2];
 
     chrono::time_point<chrono::high_resolution_clock> startTime;
     double timeLimit;
-    bool timeLimitReached;
+    bool timeUp;
     int nodesSearched;
 
     int pvMoveX, pvMoveY;
@@ -62,24 +62,21 @@ private:
     int evaluate(const OthelloBoard& board, Turn player);
     int evalMobility(const OthelloBoard& board, Turn player);
     int evalCorners(const OthelloBoard& board, Turn player);
-    int evalStabilityFast(const OthelloBoard& board, Turn player);
+    int evalStability(const OthelloBoard& board, Turn player);
     int evalPositional(const OthelloBoard& board, Turn player, int phase);
     int evalFrontier(const OthelloBoard& board, Turn player);
 
     void sortMoves(vector<Move>& moves, const OthelloBoard& board, Turn player, int ply, int ttX, int ttY);
     int scoreMove(const Move& m, const OthelloBoard& board, Turn player, int ply, int ttX, int ttY);
 
-    bool timeUp();
+    bool isTimeUp();
     bool isCorner(int x, int y) { return (x == 0 || x == 7) && (y == 0 || y == 7); }
     bool isXSquare(int x, int y) { return (x == 1 || x == 6) && (y == 1 || y == 6); }
     bool isCSquare(int x, int y) { return ((x == 0 || x == 7) && (y == 1 || y == 6)) || ((x == 1 || x == 6) && (y == 0 || y == 7)); }
-    bool isEdge(int x, int y) { return (x == 0 || x == 7 || y == 0 || y == 7) && !isCorner(x, y); }
-    bool cornerOwned(int x, int y, const OthelloBoard& board);
     int countDiscs(const OthelloBoard& board, Turn player);
-    int getEmptyCount(const OthelloBoard& board) { return 64 - board.getBlackCount() - board.getRedCount(); }
 };
 
-MyBot::MyBot(Turn turn) : OthelloPlayer(turn), timeLimitReached(false), nodesSearched(0), hasPvMove(false), pvMoveX(-1), pvMoveY(-1)
+MyBot::MyBot(Turn turn) : OthelloPlayer(turn), timeUp(false), hasPvMove(false), pvMoveX(-1), pvMoveY(-1)
 {
     transTable = new TTEntry[TT_SIZE];
     memset(transTable, 0, sizeof(TTEntry) * TT_SIZE);
@@ -89,7 +86,8 @@ MyBot::MyBot(Turn turn) : OthelloPlayer(turn), timeLimitReached(false), nodesSea
 
     initZobrist();
     initWeights();
-    timeLimit = 1.995;
+    timeLimit = 1.98;
+    nodesSearched = 0;
 }
 
 MyBot::~MyBot()
@@ -99,7 +97,7 @@ MyBot::~MyBot()
 
 void MyBot::initZobrist()
 {
-    mt19937_64 rng(0xDEADBEEF);
+    mt19937_64 rng(12345);
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             for (int k = 0; k < 3; k++) {
@@ -107,65 +105,49 @@ void MyBot::initZobrist()
             }
         }
     }
-    zobristTurn = rng();
+    zobristBlackTurn = rng();
 }
 
 void MyBot::initWeights()
 {
-    // Phase 0: Early game (< 16 discs)
     int early[8][8] = {
-        {500, -150,  30,  15,  15,  30, -150, 500},
-        {-150, -250, -20, -10, -10, -20, -250, -150},
-        { 30,  -20,  10,   5,   5,  10,  -20,  30},
-        { 15,  -10,   5,   0,   0,   5,  -10,  15},
-        { 15,  -10,   5,   0,   0,   5,  -10,  15},
-        { 30,  -20,  10,   5,   5,  10,  -20,  30},
-        {-150, -250, -20, -10, -10, -20, -250, -150},
-        {500, -150,  30,  15,  15,  30, -150, 500}
+        {500, -150,  30,  10,  10,  30, -150, 500},
+        {-150, -250,  -5,  -5,  -5,  -5, -250, -150},
+        { 30,  -5,   1,   1,   1,   1,  -5,  30},
+        { 10,  -5,   1,   1,   1,   1,  -5,  10},
+        { 10,  -5,   1,   1,   1,   1,  -5,  10},
+        { 30,  -5,   1,   1,   1,   1,  -5,  30},
+        {-150, -250,  -5,  -5,  -5,  -5, -250, -150},
+        {500, -150,  30,  10,  10,  30, -150, 500}
     };
 
-    // Phase 1: Mid-early (16-35 discs)
-    int midEarly[8][8] = {
-        {300, -80,  25,  12,  12,  25, -80, 300},
-        {-80, -120, -10,  -5,  -5, -10, -120, -80},
-        { 25,  -10,  15,   8,   8,  15,  -10,  25},
-        { 12,   -5,   8,   5,   5,   8,   -5,  12},
-        { 12,   -5,   8,   5,   5,   8,   -5,  12},
-        { 25,  -10,  15,   8,   8,  15,  -10,  25},
-        {-80, -120, -10,  -5,  -5, -10, -120, -80},
-        {300, -80,  25,  12,  12,  25, -80, 300}
+    int mid[8][8] = {
+        {200, -80,  20,   5,   5,  20, -80, 200},
+        {-80, -100,  -5,  -5,  -5,  -5, -100, -80},
+        { 20,  -5,  15,   3,   3,  15,  -5,  20},
+        {  5,  -5,   3,   3,   3,   3,  -5,   5},
+        {  5,  -5,   3,   3,   3,   3,  -5,   5},
+        { 20,  -5,  15,   3,   3,  15,  -5,  20},
+        {-80, -100,  -5,  -5,  -5,  -5, -100, -80},
+        {200, -80,  20,   5,   5,  20, -80, 200}
     };
 
-    // Phase 2: Mid-late (36-50 discs)
-    int midLate[8][8] = {
-        {200, -40,  20,  15,  15,  20, -40, 200},
-        {-40, -60,  -5,  -3,  -3,  -5, -60, -40},
-        { 20,  -5,  18,  10,  10,  18,  -5,  20},
-        { 15,  -3,  10,   8,   8,  10,  -3,  15},
-        { 15,  -3,  10,   8,   8,  10,  -3,  15},
-        { 20,  -5,  18,  10,  10,  18,  -5,  20},
-        {-40, -60,  -5,  -3,  -3,  -5, -60, -40},
-        {200, -40,  20,  15,  15,  20, -40, 200}
-    };
-
-    // Phase 3: Endgame (> 50 discs)
     int late[8][8] = {
-        {100, -15,  12,  10,  10,  12, -15, 100},
-        {-15, -20,   8,   8,   8,   8, -20, -15},
-        { 12,   8,  12,  10,  10,  12,   8,  12},
-        { 10,   8,  10,  10,  10,  10,   8,  10},
-        { 10,   8,  10,  10,  10,  10,   8,  10},
-        { 12,   8,  12,  10,  10,  12,   8,  12},
-        {-15, -20,   8,   8,   8,   8, -20, -15},
-        {100, -15,  12,  10,  10,  12, -15, 100}
+        {100, -20,  10,   5,   5,  10, -20, 100},
+        {-20, -30,   5,   5,   5,   5, -30, -20},
+        { 10,   5,   5,   5,   5,   5,   5,  10},
+        {  5,   5,   5,   5,   5,   5,   5,   5},
+        {  5,   5,   5,   5,   5,   5,   5,   5},
+        { 10,   5,   5,   5,   5,   5,   5,  10},
+        {-20, -30,   5,   5,   5,   5, -30, -20},
+        {100, -20,  10,   5,   5,  10, -20, 100}
     };
 
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             weights[0][i][j] = early[i][j];
-            weights[1][i][j] = midEarly[i][j];
-            weights[2][i][j] = midLate[i][j];
-            weights[3][i][j] = late[i][j];
+            weights[1][i][j] = mid[i][j];
+            weights[2][i][j] = late[i][j];
         }
     }
 }
@@ -180,18 +162,18 @@ uint64_t MyBot::computeHash(const OthelloBoard& board, Turn player)
             else if (c == RED) hash ^= zobristTable[i][j][1];
         }
     }
-    if (player == BLACK) hash ^= zobristTurn;
+    if (player == BLACK) hash ^= zobristBlackTurn;
     return hash;
 }
 
-bool MyBot::timeUp()
+bool MyBot::isTimeUp()
 {
-    if (timeLimitReached) return true;
+    if (timeUp) return true;
     if ((nodesSearched & 511) == 0) {
         auto now = chrono::high_resolution_clock::now();
         chrono::duration<double> elapsed = now - startTime;
         if (elapsed.count() > timeLimit) {
-            timeLimitReached = true;
+            timeUp = true;
             return true;
         }
     }
@@ -201,13 +183,6 @@ bool MyBot::timeUp()
 int MyBot::countDiscs(const OthelloBoard& board, Turn player)
 {
     return (player == BLACK) ? board.getBlackCount() : board.getRedCount();
-}
-
-bool MyBot::cornerOwned(int x, int y, const OthelloBoard& board)
-{
-    int cx = (x <= 1) ? 0 : 7;
-    int cy = (y <= 1) ? 0 : 7;
-    return board.get(cx, cy) != EMPTY;
 }
 
 int MyBot::evalMobility(const OthelloBoard& board, Turn player)
@@ -220,28 +195,24 @@ int MyBot::evalMobility(const OthelloBoard& board, Turn player)
 
 int MyBot::evalCorners(const OthelloBoard& board, Turn player)
 {
-    int score = 0;
+    int myCorners = 0, oppCorners = 0;
     Turn opp = other(player);
-    
-    // Corner values
-    if (board.get(0, 0) == player) score += 100;
-    else if (board.get(0, 0) == opp) score -= 100;
-    if (board.get(0, 7) == player) score += 100;
-    else if (board.get(0, 7) == opp) score -= 100;
-    if (board.get(7, 0) == player) score += 100;
-    else if (board.get(7, 0) == opp) score -= 100;
-    if (board.get(7, 7) == player) score += 100;
-    else if (board.get(7, 7) == opp) score -= 100;
+    int cx[4] = {0, 0, 7, 7};
+    int cy[4] = {0, 7, 0, 7};
 
-    return score;
+    for (int i = 0; i < 4; i++) {
+        Turn c = board.get(cx[i], cy[i]);
+        if (c == player) myCorners++;
+        else if (c == opp) oppCorners++;
+    }
+    return 25 * (myCorners - oppCorners);
 }
 
-int MyBot::evalStabilityFast(const OthelloBoard& board, Turn player)
+int MyBot::evalStability(const OthelloBoard& board, Turn player)
 {
     int stability = 0;
     Turn opp = other(player);
 
-    // Fast corner-based stability (corners and adjacent edges)
     int cx[4] = {0, 0, 7, 7};
     int cy[4] = {0, 7, 0, 7};
     int dx[4] = {1, 1, -1, -1};
@@ -249,30 +220,28 @@ int MyBot::evalStabilityFast(const OthelloBoard& board, Turn player)
 
     for (int c = 0; c < 4; c++) {
         Turn owner = board.get(cx[c], cy[c]);
-        if (owner == EMPTY) continue;
-
-        int mult = (owner == player) ? 1 : -1;
-        stability += 25 * mult;
-
-        // Check horizontal edge from corner
-        for (int i = cx[c] + dx[c]; i >= 0 && i < 8; i += dx[c]) {
-            if (board.get(i, cy[c]) == owner) stability += 6 * mult;
-            else break;
-        }
-
-        // Check vertical edge from corner
-        for (int j = cy[c] + dy[c]; j >= 0 && j < 8; j += dy[c]) {
-            if (board.get(cx[c], j) == owner) stability += 6 * mult;
-            else break;
-        }
-
-        // Check diagonal from corner
-        int ni = cx[c] + dx[c], nj = cy[c] + dy[c];
-        if (ni >= 0 && ni < 8 && nj >= 0 && nj < 8) {
-            if (board.get(ni, nj) == owner) stability += 4 * mult;
+        if (owner == player) {
+            stability += 30;
+            for (int j = cy[c] + dy[c]; j >= 0 && j < 8; j += dy[c]) {
+                if (board.get(cx[c], j) == player) stability += 5;
+                else break;
+            }
+            for (int i = cx[c] + dx[c]; i >= 0 && i < 8; i += dx[c]) {
+                if (board.get(i, cy[c]) == player) stability += 5;
+                else break;
+            }
+        } else if (owner == opp) {
+            stability -= 30;
+            for (int j = cy[c] + dy[c]; j >= 0 && j < 8; j += dy[c]) {
+                if (board.get(cx[c], j) == opp) stability -= 5;
+                else break;
+            }
+            for (int i = cx[c] + dx[c]; i >= 0 && i < 8; i += dx[c]) {
+                if (board.get(i, cy[c]) == opp) stability -= 5;
+                else break;
+            }
         }
     }
-
     return stability;
 }
 
@@ -289,30 +258,19 @@ int MyBot::evalPositional(const OthelloBoard& board, Turn player, int phase)
         }
     }
 
-    // Extra penalty for X-squares when corner is empty
     int xsq[4][2] = {{1,1}, {1,6}, {6,1}, {6,6}};
-    int corners[4][2] = {{0,0}, {0,7}, {7,0}, {7,7}};
+    int xcorner[4][2] = {{0,0}, {0,7}, {7,0}, {7,7}};
 
     for (int i = 0; i < 4; i++) {
-        if (board.get(corners[i][0], corners[i][1]) == EMPTY) {
+        Turn cornerOwner = board.get(xcorner[i][0], xcorner[i][1]);
+        if (cornerOwner != EMPTY) {
             Turn xOwner = board.get(xsq[i][0], xsq[i][1]);
-            if (xOwner == player) score -= 120;
-            else if (xOwner == opp) score += 120;
+            if (xOwner == cornerOwner) {
+                if (xOwner == player) score += 50;
+                else score -= 50;
+            }
         }
     }
-    
-    // C-square penalties when corner empty
-    int csq[8][2] = {{0,1}, {1,0}, {0,6}, {1,7}, {6,0}, {7,1}, {6,7}, {7,6}};
-    int cCorners[8][2] = {{0,0}, {0,0}, {0,7}, {0,7}, {7,0}, {7,0}, {7,7}, {7,7}};
-    
-    for (int i = 0; i < 8; i++) {
-        if (board.get(cCorners[i][0], cCorners[i][1]) == EMPTY) {
-            Turn cOwner = board.get(csq[i][0], csq[i][1]);
-            if (cOwner == player) score -= 40;
-            else if (cOwner == opp) score += 40;
-        }
-    }
-
     return score;
 }
 
@@ -339,9 +297,8 @@ int MyBot::evalFrontier(const OthelloBoard& board, Turn player)
         }
     }
 
-    // Fewer frontier discs is better
     if (myFrontier + oppFrontier == 0) return 0;
-    return (oppFrontier - myFrontier) * 4;
+    return -10 * (myFrontier - oppFrontier) / (myFrontier + oppFrontier + 1);
 }
 
 int MyBot::evaluate(const OthelloBoard& board, Turn player)
@@ -349,90 +306,58 @@ int MyBot::evaluate(const OthelloBoard& board, Turn player)
     int total = board.getBlackCount() + board.getRedCount();
     int empty = 64 - total;
 
-    // Determine game phase
-    int phase;
-    if (total < 16) phase = 0;
-    else if (total < 36) phase = 1;
-    else if (total < 52) phase = 2;
-    else phase = 3;
+    int phase = (total < 20) ? 0 : ((total < 50) ? 1 : 2);
 
     int myDiscs = countDiscs(board, player);
     int oppDiscs = countDiscs(board, other(player));
-    int pieceDiff = (total > 0) ? (100 * (myDiscs - oppDiscs) / total) : 0;
+    int discDiff = (total > 0) ? (100 * (myDiscs - oppDiscs) / total) : 0;
 
     int mobility = evalMobility(board, player);
     int corners = evalCorners(board, player);
-    int stability = evalStabilityFast(board, player);
+    int stability = evalStability(board, player);
     int positional = evalPositional(board, player, phase);
     int frontier = evalFrontier(board, player);
-    int parity = (empty % 2 == 1) ? 10 : -10;
+    int parity = (empty % 2 == 1) ? 3 : -3;
 
     int score = 0;
-    
     if (phase == 0) {
-        // Early: maximize mobility, avoid disc count
-        score = mobility * 25 + 
-                positional * 12 + 
-                corners * 100 + 
-                stability * 8 +
-                frontier * 10 -
-                pieceDiff * 3;
-    } 
-    else if (phase == 1) {
-        // Mid-early: balanced
-        score = mobility * 20 + 
-                positional * 10 + 
-                corners * 90 + 
-                stability * 15 +
-                frontier * 8 +
-                pieceDiff * 2;
-    } 
-    else if (phase == 2) {
-        // Mid-late: stability matters
-        score = pieceDiff * 10 +
-                mobility * 12 + 
-                positional * 6 + 
-                corners * 70 + 
-                stability * 22 +
-                frontier * 5 +
-                parity * 5;
-    } 
-    else {
-        // Endgame: disc count dominates
-        score = pieceDiff * 50 +
-                mobility * 8 + 
-                corners * 40 +
-                stability * 15 +
-                parity * 15;
+        score = mobility * 20 + positional * 5 + corners * 100 + stability * 10 + frontier * 8 - discDiff * 2;
+    } else if (phase == 1) {
+        score = mobility * 15 + positional * 4 + corners * 80 + stability * 15 + frontier * 5 + discDiff * 3;
+    } else {
+        score = mobility * 8 + positional * 2 + corners * 50 + stability * 20 + discDiff * 25 + parity * 10;
     }
-
     return score;
 }
 
 int MyBot::scoreMove(const Move& m, const OthelloBoard& board, Turn player, int ply, int ttX, int ttY)
 {
-    if (m.x == ttX && m.y == ttY) return 200000;
-    if (hasPvMove && m.x == pvMoveX && m.y == pvMoveY) return 190000;
-    if (isCorner(m.x, m.y)) return 180000;
+    if (m.x == ttX && m.y == ttY) return 100000;
+    if (hasPvMove && m.x == pvMoveX && m.y == pvMoveY) return 90000;
+    if (isCorner(m.x, m.y)) return 80000;
+
+    if (ply < 64) {
+        if (m.x == killerX[ply][0] && m.y == killerY[ply][0]) return 70000;
+        if (m.x == killerX[ply][1] && m.y == killerY[ply][1]) return 60000;
+    }
 
     int score = 0;
 
-    if (ply < 64) {
-        if (m.x == killerX[ply][0] && m.y == killerY[ply][0]) return 160000;
-        if (m.x == killerX[ply][1] && m.y == killerY[ply][1]) return 150000;
-    }
-
     if (isXSquare(m.x, m.y)) {
-        if (!cornerOwned(m.x, m.y, board)) return -100000;
-        score += 5000;
+        int cornerX = (m.x < 4) ? 0 : 7;
+        int cornerY = (m.y < 4) ? 0 : 7;
+        if (board.get(cornerX, cornerY) == EMPTY) return -10000;
+        score += 1000;
     }
 
     if (isCSquare(m.x, m.y)) {
-        if (!cornerOwned(m.x, m.y, board)) return -50000;
-        score += 3000;
+        int cornerX = (m.x == 0 || m.x == 1) ? 0 : 7;
+        int cornerY = (m.y == 0 || m.y == 1) ? 0 : 7;
+        if (board.get(cornerX, cornerY) == EMPTY) return -5000;
+        score += 500;
     }
 
-    if (isEdge(m.x, m.y)) score += 10000;
+    if (m.x == 0 || m.x == 7 || m.y == 0 || m.y == 7) score += 2000;
 
     int colorIdx = (player == BLACK) ? 0 : 1;
     score += historyTable[colorIdx][m.x][m.y];
@@ -461,12 +386,12 @@ void MyBot::sortMoves(vector<Move>& moves, const OthelloBoard& board, Turn playe
 int MyBot::negamax(OthelloBoard& board, int depth, int alpha, int beta, Turn player, int ply)
 {
     nodesSearched++;
-    if (timeUp()) return 0;
+    if (isTimeUp()) return 0;
 
     int alphaOrig = alpha;
 
     uint64_t hash = computeHash(board, player);
-    size_t ttIdx = hash & (TT_SIZE - 1);
+    int ttIdx = hash % TT_SIZE;
     TTEntry& tt = transTable[ttIdx];
     int ttX = -1, ttY = -1;
 
@@ -522,7 +447,7 @@ int MyBot::negamax(OthelloBoard& board, int depth, int alpha, int beta, Turn pla
             }
         }
 
-        if (timeUp()) return 0;
+        if (isTimeUp()) return 0;
 
         if (value > bestValue) {
             bestValue = value;
@@ -573,19 +498,18 @@ Move MyBot::iterativeDeepening(const OthelloBoard& board)
     int bestValue = -INF;
     hasPvMove = false;
 
-    int emptySquares = getEmptyCount(board);
-    int maxDepth = min(22, emptySquares + 2);
+    int emptySquares = 64 - board.getBlackCount() - board.getRedCount();
+    int maxDepth = (emptySquares <= 12) ? emptySquares + 2 : 20;
 
     memset(historyTable, 0, sizeof(historyTable));
 
-    for (int depth = 1; depth <= maxDepth && !timeLimitReached; depth++) {
+    for (int depth = 1; depth <= maxDepth && !timeUp; depth++) {
         int alpha = -INF;
         int beta = INF;
 
-        // Aspiration windows after depth 4
-        if (depth >= 4 && bestValue > -INF/2 && bestValue < INF/2) {
-            alpha = bestValue - 60;
-            beta = bestValue + 60;
+        if (depth >= 4 && bestValue != -INF && bestValue != INF) {
+            alpha = bestValue - 50;
+            beta = bestValue + 50;
         }
 
         sortMoves(moves, board, turn, 0, pvMoveX, pvMoveY);
@@ -594,7 +518,7 @@ Move MyBot::iterativeDeepening(const OthelloBoard& board)
         Move currentBestMove = moves[0];
         bool needResearch = false;
 
-        for (size_t i = 0; i < moves.size() && !timeLimitReached; i++) {
+        for (size_t i = 0; i < moves.size() && !timeUp; i++) {
             const Move& m = moves[i];
 
             OthelloBoard newBoard = board;
@@ -605,12 +529,12 @@ Move MyBot::iterativeDeepening(const OthelloBoard& board)
                 value = -negamax(newBoard, depth - 1, -beta, -alpha, other(turn), 1);
             } else {
                 value = -negamax(newBoard, depth - 1, -alpha - 1, -alpha, other(turn), 1);
-                if (value > alpha && value < beta && !timeLimitReached) {
+                if (value > alpha && value < beta && !timeUp) {
                     value = -negamax(newBoard, depth - 1, -beta, -alpha, other(turn), 1);
                 }
             }
 
-            if (timeLimitReached) break;
+            if (timeUp) break;
 
             if (value <= alpha || value >= beta) needResearch = true;
 
@@ -621,13 +545,13 @@ Move MyBot::iterativeDeepening(const OthelloBoard& board)
             alpha = max(alpha, value);
         }
 
-        if (needResearch && !timeLimitReached) {
+        if (needResearch && !timeUp) {
             alpha = -INF;
             beta = INF;
             currentBest = -INF;
 
             for (const Move& m : moves) {
-                if (timeLimitReached) break;
+                if (timeUp) break;
 
                 OthelloBoard newBoard = board;
                 newBoard.makeMove(turn, m);
@@ -642,7 +566,7 @@ Move MyBot::iterativeDeepening(const OthelloBoard& board)
             }
         }
 
-        if (!timeLimitReached) {
+        if (!timeUp) {
             bestMove = currentBestMove;
             bestValue = currentBest;
             pvMoveX = bestMove.x;
@@ -659,7 +583,7 @@ Move MyBot::iterativeDeepening(const OthelloBoard& board)
 Move MyBot::play(const OthelloBoard& board)
 {
     startTime = chrono::high_resolution_clock::now();
-    timeLimitReached = false;
+    timeUp = false;
     nodesSearched = 0;
 
     return iterativeDeepening(board);

@@ -1,12 +1,13 @@
  cd /home/abhi/College/SMAI/Search-Algorithms-Research/othello/Desdemona/bots/MyBot && make clean && make
+ 
 
-cd /home/abhi/College/SMAI/Search-Algorithms-Research/othello/Desdemona
+cd /home/abhi/College/SMAI/Search-Algorithms-Research/othello/Desdemona && ./bin/Desdemona bots/bestbot/bot.so bots/MyBot/bot.so
 
 chmod +x bin/Desdemona
 
 ./bin/Desdemona bots/akshat.so bots/bestBot/bot.so 
 
-./bin/Desdemona bots/bestBot/bot.so bots/MyBot/bot.so
+./bin/Desdemona bots/bestbot/bot.so bots/MyBot/bot.so
 ./bin/Desdemona bots/MyBot/bot.so bots/bestBot/bot.so
 
 <!-- By convention, the first bot is BLACK and the second RED. -->
