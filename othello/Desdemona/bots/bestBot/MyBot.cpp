@@ -80,7 +80,7 @@ MyBot::MyBot( Turn turn )
     : OthelloPlayer( turn ), timeLimitReached(false)
 {
     initializeWeights();
-    timeLimit = 1.95;
+    timeLimit = 1.98;
     
     // Initialize killer moves with invalid coordinates (-1, -1)
     for(int i = 0; i < 64; i++) {

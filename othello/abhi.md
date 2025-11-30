@@ -6,8 +6,8 @@ chmod +x bin/Desdemona
 
 ./bin/Desdemona bots/akshat.so bots/bestBot/bot.so 
 
-./bin/Desdemona bots/bestBot/bot.so bots/TrainerBot/bot.so
-./bin/Desdemona bots/TrainerBot/bot.so bots/bestBot/bot.so
+./bin/Desdemona bots/bestBot/bot.so bots/MyBot/bot.so
+./bin/Desdemona bots/MyBot/bot.so bots/bestBot/bot.so
 
 <!-- By convention, the first bot is BLACK and the second RED. -->
 
