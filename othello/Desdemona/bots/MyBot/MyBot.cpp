@@ -48,11 +48,26 @@ class MyBot: public OthelloPlayer
         // Killer moves heuristic (store coordinates, -1,-1 for empty)
         int killerMoves[64][2][2]; // [depth][slot][x,y]
         
+        // History heuristic
+        int historyTable[8][8];
+        
+        // Zobrist hashing
+        uint64_t zobristTable[8][8][3]; // [x][y][piece_type]
+        
+        // Opening book
+        unordered_map<uint64_t, Move> openingBook;
+        
         void initializeWeights();
+        void initializeZobrist();
+        void initializeOpeningBook();
         uint64_t hashBoard(const OthelloBoard& board);
         int evaluateBoard(const OthelloBoard& board, Turn player);
         int minimax(OthelloBoard& board, int depth, int alpha, int beta, bool maximizing, int ply);
+        int pvs(OthelloBoard& board, int depth, int alpha, int beta, bool maximizing, int ply);
+        int solveEndgame(OthelloBoard& board, int alpha, int beta, bool maximizing);
+        int quiescence(OthelloBoard& board, int alpha, int beta, bool maximizing);
         Move getBestMove(const OthelloBoard& board);
+        Move checkOpeningBook(const OthelloBoard& board);
         bool timeUp();
         
         // Enhanced evaluation functions
@@ -80,6 +95,8 @@ MyBot::MyBot( Turn turn )
     : OthelloPlayer( turn ), timeLimitReached(false)
 {
     initializeWeights();
+    initializeZobrist();
+    initializeOpeningBook();
     timeLimit = 1.92;
     
     // Initialize killer moves with invalid coordinates (-1, -1)
@@ -88,6 +105,13 @@ MyBot::MyBot( Turn turn )
         killerMoves[i][0][1] = -1;
         killerMoves[i][1][0] = -1;
         killerMoves[i][1][1] = -1;
+    }
+    
+    // Initialize history table
+    for(int i = 0; i < 8; i++) {
+        for(int j = 0; j < 8; j++) {
+            historyTable[i][j] = 0;
+        }
     }
 }
 
@@ -151,13 +175,48 @@ bool MyBot::timeUp()
     return false;
 }
 
+void MyBot::initializeZobrist()
+{
+    srand(12345); // Fixed seed for reproducibility
+    for(int i = 0; i < 8; i++) {
+        for(int j = 0; j < 8; j++) {
+            for(int k = 0; k < 3; k++) {
+                zobristTable[i][j][k] = ((uint64_t)rand() << 32) | rand();
+            }
+        }
+    }
+}
+
+void MyBot::initializeOpeningBook()
+{
+    // Opening book will be populated with proven sequences
+    // For now, keeping it empty - can be expanded based on game analysis
+}
+
+Move MyBot::checkOpeningBook(const OthelloBoard& board)
+{
+    uint64_t hash = hashBoard(board);
+    auto it = openingBook.find(hash);
+    if(it != openingBook.end()) {
+        list<Move> validMoves = board.getValidMoves(turn);
+        for(const Move& move : validMoves) {
+            if(move.x == it->second.x && move.y == it->second.y) {
+                return move;
+            }
+        }
+    }
+    return Move::pass(); // Indicates no book move found
+}
+
 uint64_t MyBot::hashBoard(const OthelloBoard& board)
 {
     uint64_t hash = 0;
     for(int i = 0; i < 8; i++) {
         for(int j = 0; j < 8; j++) {
             Turn cell = board.get(i, j);
-            hash = hash * 3 + (cell == BLACK ? 1 : (cell == RED ? 2 : 0));
+            if(cell != EMPTY) {
+                hash ^= zobristTable[i][j][(cell == BLACK) ? 0 : 1];
+            }
         }
     }
     return hash;
@@ -466,6 +525,9 @@ int MyBot::scoreMoveOrdering(const Move& move, const OthelloBoard& board, Turn p
         }
     }
     
+    // History heuristic bonus
+    score += historyTable[move.x][move.y] / 10;
+    
     // Corner moves are best
     if(isCorner(move.x, move.y)) {
         return score + 10000;
@@ -512,6 +574,226 @@ vector<Move> MyBot::orderMoves(const list<Move>& moves, const OthelloBoard& boar
     }
     
     return orderedMoves;
+}
+
+int MyBot::solveEndgame(OthelloBoard& board, int alpha, int beta, bool maximizing)
+{
+    Turn currentPlayer = maximizing ? turn : other(turn);
+    list<Move> moves = board.getValidMoves(currentPlayer);
+    
+    if(moves.empty()) {
+        Turn nextPlayer = other(currentPlayer);
+        if(board.getValidMoves(nextPlayer).empty()) {
+            // Game over - return actual score difference
+            int myPieces = countPieces(board, turn);
+            int oppPieces = countPieces(board, other(turn));
+            return (myPieces - oppPieces) * 10000;
+        }
+        return solveEndgame(board, alpha, beta, !maximizing);
+    }
+    
+    if(maximizing) {
+        int bestValue = -INF;
+        for(const Move& move : moves) {
+            OthelloBoard newBoard = board;
+            newBoard.makeMove(currentPlayer, move);
+            int eval = solveEndgame(newBoard, alpha, beta, false);
+            bestValue = max(bestValue, eval);
+            alpha = max(alpha, eval);
+            if(beta <= alpha) break;
+            if(timeUp()) break;
+        }
+        return bestValue;
+    } else {
+        int bestValue = INF;
+        for(const Move& move : moves) {
+            OthelloBoard newBoard = board;
+            newBoard.makeMove(currentPlayer, move);
+            int eval = solveEndgame(newBoard, alpha, beta, true);
+            bestValue = min(bestValue, eval);
+            beta = min(beta, eval);
+            if(beta <= alpha) break;
+            if(timeUp()) break;
+        }
+        return bestValue;
+    }
+}
+
+int MyBot::quiescence(OthelloBoard& board, int alpha, int beta, bool maximizing)
+{
+    int standPat = evaluateBoard(board, turn);
+    
+    if(maximizing) {
+        if(standPat >= beta) return beta;
+        if(alpha < standPat) alpha = standPat;
+    } else {
+        if(standPat <= alpha) return alpha;
+        if(beta > standPat) beta = standPat;
+    }
+    
+    Turn currentPlayer = maximizing ? turn : other(turn);
+    list<Move> moves = board.getValidMoves(currentPlayer);
+    
+    // Only search "forcing" moves: corners and moves when few options
+    if(moves.size() > 4) return standPat;
+    
+    for(const Move& move : moves) {
+        if(!isCorner(move.x, move.y) && moves.size() > 2) continue;
+        
+        OthelloBoard newBoard = board;
+        newBoard.makeMove(currentPlayer, move);
+        int score = quiescence(newBoard, alpha, beta, !maximizing);
+        
+        if(maximizing) {
+            if(score >= beta) return beta;
+            if(score > alpha) alpha = score;
+        } else {
+            if(score <= alpha) return alpha;
+            if(score < beta) beta = score;
+        }
+        
+        if(timeUp()) break;
+    }
+    
+    return maximizing ? alpha : beta;
+}
+
+int MyBot::pvs(OthelloBoard& board, int depth, int alpha, int beta, bool maximizing, int ply)
+{
+    if(depth == 0 || timeUp()) {
+        return quiescence(board, alpha, beta, maximizing);
+    }
+    
+    // Check transposition table
+    uint64_t hash = hashBoard(board);
+    auto it = transTable.find(hash);
+    if(it != transTable.end() && it->second.depth >= depth) {
+        if(it->second.flag == 0) return it->second.value;
+        if(it->second.flag == 1) alpha = max(alpha, it->second.value);
+        if(it->second.flag == 2) beta = min(beta, it->second.value);
+        if(alpha >= beta) return it->second.value;
+    }
+    
+    Turn currentPlayer = maximizing ? turn : other(turn);
+    list<Move> moves = board.getValidMoves(currentPlayer);
+    
+    if(moves.empty()) {
+        Turn nextPlayer = other(currentPlayer);
+        list<Move> nextMoves = board.getValidMoves(nextPlayer);
+        if(nextMoves.empty()) {
+            return evaluateBoard(board, turn);
+        }
+        return pvs(board, depth - 1, alpha, beta, !maximizing, ply + 1);
+    }
+    
+    vector<Move> orderedMoves = orderMoves(moves, board, currentPlayer, ply);
+    
+    int bestValue;
+    int flag;
+    bool firstMove = true;
+    
+    if(maximizing) {
+        bestValue = -INF;
+        
+        for(const Move& move : orderedMoves) {
+            OthelloBoard newBoard = board;
+            newBoard.makeMove(currentPlayer, move);
+            
+            int eval;
+            if(firstMove) {
+                eval = pvs(newBoard, depth - 1, alpha, beta, false, ply + 1);
+                firstMove = false;
+            } else {
+                // Multi-cut pruning
+                if(depth >= 4 && orderedMoves.size() > 1) {
+                    int shallowEval = pvs(newBoard, depth - 3, beta - 1, beta, false, ply + 1);
+                    if(shallowEval >= beta) {
+                        continue;
+                    }
+                }
+                
+                // Null window search
+                eval = pvs(newBoard, depth - 1, alpha, alpha + 1, false, ply + 1);
+                if(eval > alpha && eval < beta) {
+                    // Re-search with full window
+                    eval = pvs(newBoard, depth - 1, alpha, beta, false, ply + 1);
+                }
+            }
+            
+            if(eval > bestValue) {
+                bestValue = eval;
+            }
+            
+            alpha = max(alpha, eval);
+            if(beta <= alpha) {
+                // Update history table
+                historyTable[move.x][move.y] += depth * depth;
+                
+                // Store killer move
+                if(ply < 64 && !isCorner(move.x, move.y)) {
+                    killerMoves[ply][1][0] = killerMoves[ply][0][0];
+                    killerMoves[ply][1][1] = killerMoves[ply][0][1];
+                    killerMoves[ply][0][0] = move.x;
+                    killerMoves[ply][0][1] = move.y;
+                }
+                break;
+            }
+            if(timeUp()) break;
+        }
+        
+        flag = (bestValue <= alpha) ? 2 : ((bestValue >= beta) ? 1 : 0);
+    } else {
+        bestValue = INF;
+        
+        for(const Move& move : orderedMoves) {
+            OthelloBoard newBoard = board;
+            newBoard.makeMove(currentPlayer, move);
+            
+            int eval;
+            if(firstMove) {
+                eval = pvs(newBoard, depth - 1, alpha, beta, true, ply + 1);
+                firstMove = false;
+            } else {
+                // Multi-cut pruning
+                if(depth >= 4 && orderedMoves.size() > 1) {
+                    int shallowEval = pvs(newBoard, depth - 3, alpha, alpha + 1, true, ply + 1);
+                    if(shallowEval <= alpha) {
+                        continue;
+                    }
+                }
+                
+                eval = pvs(newBoard, depth - 1, beta - 1, beta, true, ply + 1);
+                if(eval > alpha && eval < beta) {
+                    eval = pvs(newBoard, depth - 1, alpha, beta, true, ply + 1);
+                }
+            }
+            
+            bestValue = min(bestValue, eval);
+            beta = min(beta, eval);
+            
+            if(beta <= alpha) {
+                // Update history table
+                historyTable[move.x][move.y] += depth * depth;
+                
+                // Store killer move
+                if(ply < 64 && !isCorner(move.x, move.y)) {
+                    killerMoves[ply][1][0] = killerMoves[ply][0][0];
+                    killerMoves[ply][1][1] = killerMoves[ply][0][1];
+                    killerMoves[ply][0][0] = move.x;
+                    killerMoves[ply][0][1] = move.y;
+                }
+                break;
+            }
+            if(timeUp()) break;
+        }
+        
+        flag = (bestValue <= alpha) ? 2 : ((bestValue >= beta) ? 1 : 0);
+    }
+    
+    // Store in transposition table
+    transTable[hash] = {depth, bestValue, flag};
+    
+    return bestValue;
 }
 
 int MyBot::minimax(OthelloBoard& board, int depth, int alpha, int beta, bool maximizing, int ply)
@@ -620,33 +902,82 @@ Move MyBot::getBestMove(const OthelloBoard& board)
         return moves.front();
     }
     
+    // Check opening book
+    Move bookMove = checkOpeningBook(board);
+    if(bookMove.x != -1 && bookMove.y != -1) {
+        return bookMove;
+    }
+    
     transTable.clear();
     
     Move bestMove = moves.front();
+    int emptySquares = 64 - board.getBlackCount() - board.getRedCount();
     
-    // Iterative deepening with aspiration windows
+    // Perfect endgame solver for ≤12 empty squares
+    if(emptySquares <= 12) {
+        int bestValue = -INF;
+        
+        for(const Move& move : moves) {
+            if(timeUp()) break;
+            OthelloBoard newBoard = board;
+            newBoard.makeMove(turn, move);
+            int value = solveEndgame(newBoard, -INF, INF, false);
+            if(value > bestValue) {
+                bestValue = value;
+                bestMove = move;
+            }
+        }
+        return bestMove;
+    }
+    
+    // Iterative deepening with aspiration windows and PVS
+    int prevBestValue = 0;
+    int window = 50;
+    
     for(int depth = 1; depth <= 20 && !timeUp(); depth++) {
         Move currentBest = moves.front();
         int bestValue = -INF;
+        int alpha = prevBestValue - window;
+        int beta = prevBestValue + window;
         
-        vector<Move> orderedMoves = orderMoves(moves, board, turn, 0);
+        bool research = true;
+        int researchCount = 0;
         
-        for(const Move& move : orderedMoves) {
-            if(timeUp()) break;
+        while(research && !timeUp() && researchCount < 3) {
+            research = false;
+            researchCount++;
             
-            OthelloBoard newBoard = board;
-            newBoard.makeMove(turn, move);
+            vector<Move> orderedMoves = orderMoves(moves, board, turn, 0);
             
-            int value = minimax(newBoard, depth - 1, -INF, INF, false, 1);
-            
-            if(value > bestValue) {
-                bestValue = value;
-                currentBest = move;
+            for(const Move& move : orderedMoves) {
+                if(timeUp()) break;
+                
+                OthelloBoard newBoard = board;
+                newBoard.makeMove(turn, move);
+                
+                int value = pvs(newBoard, depth - 1, alpha, beta, false, 1);
+                
+                if(value <= alpha || value >= beta) {
+                    // Failed - research with wider window
+                    alpha = -INF;
+                    beta = INF;
+                    research = true;
+                    break;
+                }
+                
+                if(value > bestValue) {
+                    bestValue = value;
+                    currentBest = move;
+                }
             }
         }
         
         if(!timeUp()) {
             bestMove = currentBest;
+            prevBestValue = bestValue;
+            
+            // Adjust window for next iteration
+            window = 50 + depth * 5;
         } else {
             break;
         }
