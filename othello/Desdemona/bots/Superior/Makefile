@@ -6,7 +6,7 @@
 ROOTDIR  = ../../
 include $(ROOTDIR)Makefile.inc
 
-BOT	= TrainerBot
+BOT	= Superior
 OUT = bot.so
 
 OBJS = $(BOT).o
@@ -18,3 +18,12 @@ $(OUT): $(BOT).o $(ROOTDIR)lib/libOthello.so
 
 ${OBJS}: %.o : %.cpp 
 	$(CC) $(CFLAGS) -c $^ -o $@
+
+.PHONY: clean submission
+
+submission: clean
+	zip submission.zip *
+
+clean:
+	rm -rf $(OUT)
+	rm -rf *.o
